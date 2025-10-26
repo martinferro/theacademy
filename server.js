@@ -1,218 +1,134 @@
 const path = require('path');
 const express = require('express');
-const axios = require('axios');
+const fetch = require('node-fetch');
+const twilio = require('twilio');
+const dotenv = require('dotenv');
 
-const {
-  normalizePhone,
-  canRequestCode,
-  createVerificationCode,
-  clearPendingCode,
-  verifyCode,
-  issueToken,
-  validateToken,
-  CODE_TTL_MS,
-} = require('./lib/authStore');
-const { sendVerificationCode, isConfigured: isSmsConfigured } = require('./services/smsService');
-
-require('dotenv').config({ path: path.join(__dirname, '.env') });
-
-const PUBLIC_DIR = path.join(__dirname, 'public');
-const PORT = parseInt(process.env.PORT, 10) || 3000;
-
-function ensureTelegramConfig() {
-  const { TELEGRAM_TOKEN, TELEGRAM_CHAT_ID } = process.env;
-  if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) {
-    throw new Error('Faltan TELEGRAM_TOKEN o TELEGRAM_CHAT_ID en las variables de entorno.');
-  }
-}
-
-async function forwardToTelegram({ phone, message }) {
-  ensureTelegramConfig();
-
-  const token = process.env.TELEGRAM_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-
-  const payload = {
-    chat_id: chatId,
-    text: [`Mensaje verificado de ${phone}`, '', message].join('\n'),
-  };
-
-  const response = await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, payload);
-
-  return response.data;
-}
-
-function getTokenFromRequest(req) {
-  const authHeader = req.get('Authorization') || '';
-  if (authHeader.startsWith('Bearer ')) {
-    return authHeader.slice(7).trim();
-  }
-
-  if (req.query?.token) {
-    return String(req.query.token);
-  }
-
-  if (req.body?.token && typeof req.body.token === 'string') {
-    return req.body.token;
-  }
-
-  return null;
-}
-
-function requireAuth(req, res, next) {
-  const token = getTokenFromRequest(req);
-  const session = validateToken(token);
-
-  if (!session) {
-    res.status(401).json({ error: 'Autenticación requerida.' });
-    return;
-  }
-
-  req.session = session;
-  req.token = token;
-  next();
-}
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+const verificationCodes = {};
+const verifiedPhones = new Set();
+
+function getTwilioClient() {
+  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN } = process.env;
+
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+    throw new Error('Faltan las credenciales de Twilio en las variables de entorno.');
+  }
+
+  return twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+}
+
+function ensureTelegramConfig() {
+  const { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = process.env;
+
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    throw new Error('Faltan TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID en las variables de entorno.');
+  }
+}
+
+function createVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 app.use(express.json());
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.post('/api/auth/request-code', async (req, res) => {
-  const phone = normalizePhone(req.body?.phone ?? req.body?.telefono);
-
-  if (!phone) {
-    res.status(400).json({ error: 'Número de teléfono inválido.' });
-    return;
-  }
-
-  const availability = canRequestCode(phone);
-  if (!availability.allowed) {
-    res.status(429).json({
-      error: 'Debes esperar antes de solicitar un nuevo código.',
-      retryAfter: availability.retryAfter,
-    });
-    return;
-  }
-
-  const { code, expiresAt } = createVerificationCode(phone);
-
+app.post('/api/enviar-codigo', async (req, res) => {
   try {
-    const delivery = await sendVerificationCode(phone, code, {
-      expiresInMs: CODE_TTL_MS,
-    });
-    const response = {
-      ok: true,
-      phone,
-      expiresIn: Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)),
-      delivery: delivery.delivered ? 'sms' : 'mock',
-    };
+    const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
 
-    if (!delivery.delivered && process.env.NODE_ENV !== 'production') {
-      response.devCode = code;
+    if (!phone) {
+      res.status(400).json({ ok: false, error: 'Número de teléfono inválido.' });
+      return;
     }
 
-    res.json(response);
-  } catch (error) {
-    clearPendingCode(phone);
-    const message =
-      error?.response?.data?.message ||
-      error?.message ||
-      'No se pudo enviar el código de verificación.';
-    res.status(502).json({ error: message });
-  }
-});
+    const code = createVerificationCode();
+    verificationCodes[phone] = code;
 
-app.post('/api/auth/verify-code', (req, res) => {
-  const phone = normalizePhone(req.body?.phone ?? req.body?.telefono);
-  const rawCode = req.body?.code ?? req.body?.codigo;
-  const code = typeof rawCode === 'string' || typeof rawCode === 'number' ? String(rawCode).trim() : '';
+    const client = getTwilioClient();
+    const from = process.env.TWILIO_PHONE_NUMBER;
 
-  if (!phone) {
-    res.status(400).json({ error: 'Número de teléfono inválido.' });
-    return;
-  }
+    if (!from) {
+      throw new Error('Falta TWILIO_PHONE_NUMBER en las variables de entorno.');
+    }
 
-  if (!/^\d{6}$/.test(code)) {
-    res.status(400).json({ error: 'El código debe tener 6 dígitos.' });
-    return;
-  }
-
-  const result = verifyCode(phone, code);
-  if (!result.ok) {
-    const messages = {
-      code_not_found: 'Solicita un nuevo código de verificación.',
-      code_expired: 'El código ha expirado. Solicita uno nuevo.',
-      code_invalid: 'Código incorrecto. Inténtalo nuevamente.',
-    };
-
-    res.status(400).json({
-      error: messages[result.reason] || 'No se pudo validar el código.',
-      attempts: result.attempts,
+    await client.messages.create({
+      body: `Tu código de verificación es: ${code}`,
+      from,
+      to: phone,
     });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error al enviar el código de verificación:', error.message);
+    res.status(500).json({ ok: false, error: 'No se pudo enviar el código de verificación.' });
+  }
+});
+
+app.post('/api/verificar-codigo', (req, res) => {
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+  const code = req.body?.code != null ? String(req.body.code).trim() : '';
+
+  if (!phone || !/^\d{6}$/.test(code)) {
+    res.status(400).json({ ok: false });
     return;
   }
 
-  const session = issueToken(phone);
-  res.json({
-    ok: true,
-    token: session.token,
-    phone,
-    expiresIn: Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000)),
-  });
+  const storedCode = verificationCodes[phone];
+  const isValid = storedCode && storedCode === code;
+
+  if (isValid) {
+    verifiedPhones.add(phone);
+    delete verificationCodes[phone];
+  }
+
+  res.json({ ok: Boolean(isValid) });
 });
 
-app.get('/api/auth/status', (req, res) => {
-  const token = getTokenFromRequest(req);
-  const session = validateToken(token);
+app.post('/api/mensaje', async (req, res) => {
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+  const mensaje = typeof req.body?.mensaje === 'string' ? req.body.mensaje.trim() : '';
 
-  if (!session) {
-    res.status(401).json({ ok: false, error: 'Sesión no válida.' });
+  if (!phone || !mensaje) {
+    res.status(400).json({ ok: false, error: 'Solicitud inválida.' });
     return;
   }
 
-  res.json({
-    ok: true,
-    phone: session.phone,
-    expiresIn: Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000)),
-  });
-});
-
-app.post('/api/mensaje', requireAuth, async (req, res) => {
-  const mensaje = req.body?.mensaje?.toString().trim();
-
-  if (!mensaje) {
-    res.status(400).json({ error: 'El campo "mensaje" es requerido.' });
+  if (!verifiedPhones.has(phone)) {
+    res.status(403).json({ ok: false, error: 'El número no ha sido verificado.' });
     return;
   }
 
   try {
-    await forwardToTelegram({ phone: req.session.phone, message: mensaje });
+    ensureTelegramConfig();
+
+    const response = await fetch(
+      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: process.env.TELEGRAM_CHAT_ID,
+          text: `📱 Nuevo mensaje de ${phone}:\n${mensaje}`,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Telegram API respondió con estado ${response.status}`);
+    }
+
+    res.json({ ok: true, result: 'Mensaje enviado correctamente ✅' });
   } catch (error) {
-    const message =
-      error?.response?.data?.description ||
-      error?.message ||
-      'No se pudo enviar el mensaje a Telegram.';
-    res.status(502).json({ error: message });
-    return;
-  }
-
-  res.json({
-    ok: true,
-    mensaje: 'Mensaje enviado correctamente.',
-    respuesta: 'Mensaje enviado correctamente.',
-  });
-});
-
-app.use((req, res) => {
-  res.status(404).json({ error: 'Ruta no encontrada.' });
-});
-
-const server = app.listen(PORT, () => {
-  console.log(`Servidor escuchando en el puerto ${PORT}`);
-  if (!isSmsConfigured()) {
-    console.log('Servicio SMS no configurado. Los códigos se registrarán en la consola.');
+    console.error('Error al enviar mensaje a Telegram:', error.message);
+    res.status(500).json({ ok: false, error: 'No se pudo enviar el mensaje.' });
   }
 });
 
-module.exports = server;
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en http://localhost:${PORT}`);
+});
