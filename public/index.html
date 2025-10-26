@@ -7,23 +7,40 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <main class="card">
-      <h1>Compra tus fichas</h1>
-      <button id="buyButton" class="primary-button">COMPRAR FICHAS</button>
-      <section id="chat" class="chat" hidden>
-        <div id="messages" class="messages" aria-live="polite"></div>
-        <form id="chatForm" class="chat-form">
-          <label class="sr-only" for="messageInput">Escribe tu mensaje</label>
-          <input
-            id="messageInput"
-            name="message"
-            type="text"
-            placeholder="Escribe tu mensaje"
-            required
-            autocomplete="off"
-          />
-          <button type="submit" class="secondary-button">Enviar</button>
-        </form>
+    <main class="whatsapp-app">
+      <section class="chat-card">
+        <header class="chat-header">
+          <div class="chat-avatar" aria-hidden="true">TA</div>
+          <div class="chat-contact">
+            <h1 class="chat-title">The Academy</h1>
+            <p class="chat-status">en línea</p>
+          </div>
+          <button id="buyButton" class="chat-buy-button" type="button">
+            Comprar fichas
+          </button>
+        </header>
+        <section id="chat" class="chat-window" hidden>
+          <div id="messages" class="messages" aria-live="polite"></div>
+          <form id="chatForm" class="chat-form">
+            <label class="sr-only" for="messageInput">Escribe tu mensaje</label>
+            <input
+              id="messageInput"
+              name="message"
+              type="text"
+              placeholder="Escribe tu mensaje"
+              required
+              autocomplete="off"
+            />
+            <button type="submit" class="chat-send-button" aria-label="Enviar mensaje">
+              <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+                <path
+                  d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"
+                  fill="currentColor"
+                />
+              </svg>
+            </button>
+          </form>
+        </section>
       </section>
     </main>
     <script src="script.js" defer></script>
