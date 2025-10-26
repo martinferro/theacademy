@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>theacademy - Verificación SMS</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header class="header">
+        <h1>theacademy</h1>
+        <p class="subtitle">
+          Valida tu identidad con tu número de teléfono antes de chatear con nuestro bot de Telegram.
+        </p>
+      </header>
+
+      <section id="authSection" class="section">
+        <form id="phoneForm" class="form-block" autocomplete="off">
+          <h2>1. Ingresa tu teléfono</h2>
+          <label class="sr-only" for="phoneInput">Número de teléfono</label>
+          <input
+            id="phoneInput"
+            name="phone"
+            type="tel"
+            inputmode="tel"
+            placeholder="Ej. +5215512345678"
+            required
+          />
+          <p class="help">Recibirás un código por SMS para continuar.</p>
+          <button class="primary-button" type="submit">Enviar código</button>
+        </form>
+
+        <form id="codeForm" class="form-block" hidden autocomplete="one-time-code">
+          <h2>2. Verifica el código</h2>
+          <label class="sr-only" for="codeInput">Código SMS</label>
+          <input
+            id="codeInput"
+            name="code"
+            type="text"
+            inputmode="numeric"
+            pattern="\d{6}"
+            maxlength="6"
+            placeholder="Ingresa los 6 dígitos"
+            required
+          />
+          <p class="help">Revisa tu SMS e ingresa el código de 6 dígitos.</p>
+          <button class="primary-button" type="submit">Validar código</button>
+          <button class="secondary-button" type="button" id="resendButton">Reenviar código</button>
+        </form>
+      </section>
+
+      <section id="chatSection" class="section" hidden>
+        <div class="chat-header">
+          <div>
+            <h2>3. Envía tu mensaje</h2>
+            <p id="verifiedPhone" class="verified"></p>
+          </div>
+          <button class="secondary-button" id="logoutButton" type="button">Cerrar sesión</button>
+        </div>
+
+        <div id="messages" class="messages" role="log" aria-live="polite"></div>
+
+        <form id="chatForm" class="chat-form">
+          <label class="sr-only" for="messageInput">Mensaje</label>
+          <input
+            id="messageInput"
+            name="mensaje"
+            placeholder="Escribe tu mensaje para Telegram"
+            autocomplete="off"
+            required
+          />
+          <button class="primary-button" type="submit">Enviar</button>
+        </form>
+      </section>
+
+      <div id="alerts" class="alerts" role="status" aria-live="polite"></div>
+    </main>
+
+    <script src="/script.js" defer></script>
+  </body>
+</html>
