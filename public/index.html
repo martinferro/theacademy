@@ -3,28 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>theacademy - Verificación SMS</title>
+    <title>theacademy - Chat con Cajero</title>
     <link rel="stylesheet" href="/style.css" />
+    <script src="/socket.io/socket.io.js"></script>
   </head>
+
   <body>
     <main class="card">
       <header class="header">
         <h1>theacademy</h1>
         <p class="subtitle">
-          Valida tu identidad con tu número de teléfono antes de chatear con nuestro bot de Telegram.
+          Verifica tu teléfono para poder chatear con el cajero en tiempo real.
         </p>
       </header>
 
+      <!-- 🧩 SECCIÓN 1: VERIFICACIÓN SMS -->
       <section id="authSection" class="section">
         <form id="phoneForm" class="form-block" autocomplete="off">
           <h2>1. Ingresa tu teléfono</h2>
-          <label class="sr-only" for="phoneInput">Número de teléfono</label>
           <input
             id="phoneInput"
             name="phone"
             type="tel"
             inputmode="tel"
-            placeholder="Ej. +5215512345678"
+            placeholder="Ej. +5491124098501"
             required
           />
           <p class="help">Recibirás un código por SMS para continuar.</p>
@@ -33,7 +35,6 @@
 
         <form id="codeForm" class="form-block" hidden autocomplete="one-time-code">
           <h2>2. Verifica el código</h2>
-          <label class="sr-only" for="codeInput">Código SMS</label>
           <input
             id="codeInput"
             name="code"
@@ -44,29 +45,31 @@
             placeholder="Ingresa los 6 dígitos"
             required
           />
-          <p class="help">Revisa tu SMS e ingresa el código de 6 dígitos.</p>
+          <p class="help">Revisa tu SMS e ingresa el código recibido.</p>
           <button class="primary-button" type="submit">Validar código</button>
           <button class="secondary-button" type="button" id="resendButton">Reenviar código</button>
         </form>
       </section>
 
+      <!-- 💬 SECCIÓN 2: CHAT EN TIEMPO REAL -->
       <section id="chatSection" class="section" hidden>
         <div class="chat-header">
           <div>
-            <h2>3. Envía tu mensaje</h2>
+            <h2>3. Chat con el Cajero</h2>
             <p id="verifiedPhone" class="verified"></p>
           </div>
           <button class="secondary-button" id="logoutButton" type="button">Cerrar sesión</button>
         </div>
 
-        <div id="messages" class="messages" role="log" aria-live="polite"></div>
+        <div id="messages" class="messages" role="log" aria-live="polite">
+          <p class="help">Esperando mensajes...</p>
+        </div>
 
         <form id="chatForm" class="chat-form">
-          <label class="sr-only" for="messageInput">Mensaje</label>
           <input
             id="messageInput"
             name="mensaje"
-            placeholder="Escribe tu mensaje para Telegram"
+            placeholder="Escribe tu mensaje"
             autocomplete="off"
             required
           />
@@ -77,6 +80,105 @@
       <div id="alerts" class="alerts" role="status" aria-live="polite"></div>
     </main>
 
-    <script src="/script.js" defer></script>
+    <!-- ========================= -->
+    <!--  LÓGICA DEL FRONT-END     -->
+    <!-- ========================= -->
+    <script>
+      const socket = io();
+      let telefonoVerificado = null;
+
+      // =============== 1️⃣ Solicitar código
+      const phoneForm = document.getElementById("phoneForm");
+      const codeForm = document.getElementById("codeForm");
+      const chatSection = document.getElementById("chatSection");
+
+      phoneForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const phone = document.getElementById("phoneInput").value.trim();
+        if (!phone) return alert("Ingresa un teléfono válido");
+
+        const res = await fetch("/api/auth/request-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone }),
+        });
+
+        const data = await res.json();
+        if (data.ok) {
+          alert("Código enviado por SMS");
+          phoneForm.hidden = true;
+          codeForm.hidden = false;
+          codeForm.dataset.phone = phone;
+        } else {
+          alert("Error: " + (data.error || "No se pudo enviar el código"));
+        }
+      });
+
+      // =============== 2️⃣ Verificar código
+      codeForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const code = document.getElementById("codeInput").value.trim();
+        const phone = codeForm.dataset.phone;
+
+        const res = await fetch("/api/auth/verify-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, code }),
+        });
+
+        const data = await res.json();
+        if (data.ok) {
+          telefonoVerificado = phone;
+          socket.emit("registrarTelefono", phone);
+          document.getElementById("verifiedPhone").textContent = `Teléfono verificado: ${phone}`;
+          document.getElementById("authSection").hidden = true;
+          chatSection.hidden = false;
+        } else {
+          alert("Código incorrecto");
+        }
+      });
+
+      // =============== 3️⃣ Chat (enviar mensaje)
+      const chatForm = document.getElementById("chatForm");
+      chatForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const input = document.getElementById("messageInput");
+        const mensaje = input.value.trim();
+        if (!mensaje) return;
+
+        agregarMensaje("Tú", mensaje);
+        input.value = "";
+
+        await fetch("/api/mensaje", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mensaje, telefono: telefonoVerificado }),
+        });
+      });
+
+      // =============== 4️⃣ Escuchar respuestas en tiempo real
+      socket.on("mensaje", ({ autor, texto }) => {
+        agregarMensaje(autor, texto);
+      });
+
+      // =============== 5️⃣ Renderizar mensajes
+      function agregarMensaje(autor, texto) {
+        const chat = document.getElementById("messages");
+        chat.querySelector(".help")?.remove();
+        const msg = document.createElement("div");
+        msg.className = autor === "Tú" ? "msg-user" : "msg-bot";
+        msg.textContent = `${autor}: ${texto}`;
+        chat.appendChild(msg);
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      // =============== 6️⃣ Cerrar sesión
+      document.getElementById("logoutButton").addEventListener("click", () => {
+        telefonoVerificado = null;
+        chatSection.hidden = true;
+        phoneForm.hidden = false;
+        document.getElementById("messages").innerHTML = "";
+      });
+    </script>
   </body>
 </html>
