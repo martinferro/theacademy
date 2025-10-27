@@ -219,3 +219,15 @@ input:focus {
     width: 100%;
   }
 }
+
+.msg-user {
+  text-align: right;
+  color: #00c3ff;
+  margin: 5px 0;
+}
+
+.msg-bot {
+  text-align: left;
+  color: #00ff95;
+  margin: 5px 0;
+}
