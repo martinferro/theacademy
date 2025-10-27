@@ -1,0 +1,19 @@
+body {
+    background-color: #f5f7fb;
+}
+
+.sidebar {
+    min-height: 100vh;
+}
+
+.nav-link.active {
+    font-weight: 600;
+}
+
+.table-actions button {
+    margin-right: 0.25rem;
+}
+
+.badge-turno {
+    text-transform: capitalize;
+}
