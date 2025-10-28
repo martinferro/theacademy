@@ -19,6 +19,17 @@ const chatSearch = document.getElementById('chatSearch');
 let chatActivo = null;
 const chats = new Map();
 
+function normalizeText(value) {
+  if (!value) return '';
+  return value
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
 function ensureChat(telefono) {
   if (!chats.has(telefono)) {
     chats.set(telefono, {
@@ -55,14 +66,16 @@ function initialsFrom(text) {
 }
 
 function renderChatList(filter = '') {
-  const normalized = filter.trim().toLowerCase();
+  const normalized = normalizeText(filter);
   const items = Array.from(chats.values())
     .filter((chat) => {
-      const name = chat.displayName || chat.telefono;
+      const name = chat.displayName || '';
+      const matchableName = normalizeText(name);
+      const matchablePhone = normalizeText(chat.telefono);
       return (
         !normalized ||
-        name.toLowerCase().includes(normalized) ||
-        chat.telefono.toLowerCase().includes(normalized)
+        matchableName.includes(normalized) ||
+        matchablePhone.includes(normalized)
       );
     })
     .sort((a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0));
