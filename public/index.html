@@ -19,7 +19,7 @@
           </div>
         </header>
 
-        <section id="authSection" class="card-block">
+        <section id="authSection" class="card-block auth-card">
           <h2>Verificación rápida</h2>
           <p class="muted">
             Valida tu número de teléfono para habilitar el chat seguro con nuestro equipo.
@@ -128,14 +128,14 @@
           <h2>Acciones rápidas</h2>
           <p class="muted">Selecciona una opción para comenzar la conversación.</p>
           <div class="action-grid">
-            <button class="action-button" type="button" data-message-template="Hola, quiero comprar fichas.">
-              Comprar Fichas
+            <button class="action-button" type="button" data-message-template="Hola, me gustaría solicitar fichas.">
+              Solicitar Fichas
             </button>
-            <button class="action-button" type="button" data-message-template="Me gustaría solicitar mi recompensa.">
-              Solicitar recompensa
+            <button class="action-button" type="button" data-message-template="Hola, quiero solicitar mi recompensa.">
+              Solicitar Recompensa
             </button>
-            <button class="action-button" type="button" data-message-template="Necesito ayuda del equipo de soporte.">
-              Soporte
+            <button class="action-button" type="button" data-message-template="Hola, necesito solicitar soporte.">
+              Solicitar Soporte
             </button>
           </div>
         </section>
@@ -154,6 +154,7 @@
       const socket = io();
       let telefonoVerificado = null;
 
+      const appShell = document.querySelector(".app-shell");
       const phoneForm = document.getElementById("phoneForm");
       const codeForm = document.getElementById("codeForm");
       const resendButton = document.getElementById("resendButton");
@@ -163,6 +164,34 @@
       const actionButtons = document.querySelectorAll("[data-message-template]");
       const platformLinksList = document.getElementById("platformLinksList");
       const platformLinksStatus = document.getElementById("platformLinksStatus");
+      const verifiedPhoneLabel = document.getElementById("verifiedPhone");
+      const messageInput = document.getElementById("messageInput");
+      const storageKey = "theacademy.telefonoVerificado";
+
+      const safeSession = {
+        get() {
+          try {
+            return sessionStorage.getItem(storageKey);
+          } catch (error) {
+            console.warn("No se pudo acceder a sessionStorage", error);
+            return null;
+          }
+        },
+        set(value) {
+          try {
+            sessionStorage.setItem(storageKey, value);
+          } catch (error) {
+            console.warn("No se pudo guardar el teléfono verificado", error);
+          }
+        },
+        clear() {
+          try {
+            sessionStorage.removeItem(storageKey);
+          } catch (error) {
+            console.warn("No se pudo limpiar el teléfono verificado", error);
+          }
+        },
+      };
 
       function showAlert(message, type = "info", timeout = 4000) {
         alertsContainer.innerHTML = "";
@@ -224,6 +253,60 @@
           input.focus();
         });
       });
+
+      function enterAuthenticatedState(phone, { persist = true, announce = true } = {}) {
+        telefonoVerificado = phone;
+        if (persist) {
+          safeSession.set(phone);
+        }
+        socket.emit("registrarTelefono", phone);
+        verifiedPhoneLabel.textContent = `Teléfono verificado: ${phone}`;
+        authSection.classList.add("is-hidden");
+        authSection.hidden = true;
+        authSection.setAttribute("aria-hidden", "true");
+        chatSection.hidden = false;
+        chatSection.removeAttribute("aria-hidden");
+        appShell.classList.add("authenticated");
+        phoneForm.hidden = false;
+        codeForm.hidden = true;
+        phoneForm.reset();
+        codeForm.reset();
+        codeForm.dataset.phone = phone;
+        messageInput.focus();
+        if (announce) {
+          showAlert("¡Bienvenido al chat!", "success");
+        }
+      }
+
+      function exitAuthenticatedState({ announce = true } = {}) {
+        telefonoVerificado = null;
+        safeSession.clear();
+        chatSection.hidden = true;
+        chatSection.setAttribute("aria-hidden", "true");
+        authSection.classList.remove("is-hidden");
+        authSection.hidden = false;
+        authSection.removeAttribute("aria-hidden");
+        appShell.classList.remove("authenticated");
+        phoneForm.hidden = false;
+        codeForm.hidden = true;
+        phoneForm.reset();
+        codeForm.reset();
+        codeForm.dataset.phone = "";
+        document.getElementById("messages").innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">💡</div>
+            <p>Escribe tu primer mensaje y recibe asistencia inmediata.</p>
+          </div>`;
+        if (announce) {
+          showAlert("Sesión finalizada", "info");
+        }
+      }
+
+      const storedPhone = safeSession.get();
+      if (storedPhone) {
+        enterAuthenticatedState(storedPhone, { persist: false, announce: false });
+        showAlert("Restauramos tu chat verificado.", "success", 3000);
+      }
 
       phoneForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -288,13 +371,7 @@
 
         const data = await res.json();
         if (data.ok) {
-          telefonoVerificado = phone;
-          socket.emit("registrarTelefono", phone);
-          document.getElementById("verifiedPhone").textContent = `Teléfono verificado: ${phone}`;
-          authSection.hidden = true;
-          chatSection.hidden = false;
-          document.getElementById("messageInput").focus();
-          showAlert("¡Bienvenido al chat!", "success");
+          enterAuthenticatedState(phone);
         } else {
           showAlert("Código incorrecto", "error");
         }
@@ -347,18 +424,7 @@
       }
 
       document.getElementById("logoutButton").addEventListener("click", () => {
-        telefonoVerificado = null;
-        chatSection.hidden = true;
-        authSection.hidden = false;
-        phoneForm.hidden = false;
-        codeForm.hidden = true;
-        codeForm.dataset.phone = "";
-        document.getElementById("messages").innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">💡</div>
-            <p>Escribe tu primer mensaje y recibe asistencia inmediata.</p>
-          </div>`;
-        showAlert("Sesión finalizada", "info");
+        exitAuthenticatedState();
       });
     </script>
   </body>
