@@ -19,6 +19,43 @@ const chatSearch = document.getElementById('chatSearch');
 let chatActivo = null;
 const chats = new Map();
 
+async function cargarChatsActivos() {
+  try {
+    const response = await fetch('/api/chats-activos');
+    if (!response.ok) {
+      throw new Error(`Error ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const lista = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.chats)
+        ? payload.chats
+        : [];
+
+    lista.forEach((item) => {
+      const telefono = item?.telefono || item?.phone;
+      if (!telefono) return;
+
+      const chat = ensureChat(telefono);
+      chat.displayName = item?.nombre || item?.displayName || chat.displayName;
+      chat.lastMessage = item?.ultimo_mensaje || item?.lastMessage || '';
+
+      const fecha = item?.fecha_ultima || item?.lastTimestamp;
+      const parsedTimestamp =
+        typeof fecha === 'number' ? fecha : fecha ? new Date(fecha).getTime() : 0;
+      chat.lastTimestamp = Number.isFinite(parsedTimestamp) ? parsedTimestamp : 0;
+
+      chat.messages = chat.messages || [];
+      chat.unread = chat.unread || 0;
+    });
+  } catch (error) {
+    console.error('No se pudieron cargar los chats activos:', error);
+  } finally {
+    renderChatList(chatSearch.value);
+  }
+}
+
 function ensureChat(telefono) {
   if (!chats.has(telefono)) {
     chats.set(telefono, {
@@ -316,5 +353,6 @@ btnAsignar.addEventListener('click', () => {
 // ===============================
 // Estado inicial
 // ===============================
+cargarChatsActivos();
 updateHeader();
 renderChatList();
