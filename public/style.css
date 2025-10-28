@@ -66,6 +66,18 @@ body {
   backdrop-filter: blur(8px);
 }
 
+.auth-card.is-hidden {
+  display: none !important;
+}
+
+.app-shell.authenticated .auth-card {
+  display: none !important;
+}
+
+.app-shell.authenticated .chat-column {
+  gap: 1.25rem;
+}
+
 .card-block h2 {
   margin: 0;
   font-size: 1.2rem;
