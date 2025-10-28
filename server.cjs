@@ -127,6 +127,10 @@ app.get("/cajero", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "cajero.html"));
 });
 
+app.get("/chat-integrado", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "chat-embed.html"));
+});
+
 // ===============================
 // AUTH - Verificación por SMS (Twilio)
 // ===============================
