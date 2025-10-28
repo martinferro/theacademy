@@ -251,14 +251,19 @@ app.post("/api/mensaje", async (req, res) => {
   db.run("INSERT INTO mensajes (telefono, autor, mensaje) VALUES (?, ?, ?)", [telefono, "usuario", mensaje]);
   db.run("UPDATE chats SET ultimo_mensaje = ?, fecha_ultima = CURRENT_TIMESTAMP WHERE telefono = ?", [mensaje, telefono]);
 
-  const telegramToken = process.env.TELEGRAM_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-  const texto = `💬 Nuevo mensaje:\n📱 ${telefono}\n📝 ${mensaje}`;
+  try {
+    const telegramToken = process.env.TELEGRAM_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    const texto = `💬 Nuevo mensaje:\n📱 ${telefono}\n📝 ${mensaje}`;
 
-  await axios.post(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-    chat_id: chatId,
-    text: texto,
-  });
+    await axios.post(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      chat_id: chatId,
+      text: texto,
+    });
+  } catch (error) {
+    console.error("❌ Error reenviando mensaje del usuario a Telegram:", error.message);
+    return res.status(502).json({ ok: false, error: "No se pudo reenviar el mensaje a Telegram" });
+  }
 
   io.emit("nuevoMensajeUsuario", { telefono, mensaje });
   res.json({ ok: true });
@@ -304,9 +309,32 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("mensajeCajero", ({ telefono, mensaje }) => {
+  socket.on("mensajeCajero", async ({ telefono, mensaje }) => {
+    if (!telefono || !mensaje) return;
+
     db.run("INSERT INTO mensajes (telefono, autor, mensaje) VALUES (?, ?, ?)", [telefono, "cajero", mensaje]);
-    io.emit("mensaje", { autor: "Cajero", texto: mensaje, telefono });
+
+    let telegramDelivered = true;
+    try {
+      const telegramToken = process.env.TELEGRAM_TOKEN;
+      const chatId = process.env.TELEGRAM_CHAT_ID;
+      const texto = `📨 Respuesta del cajero:\n📱 ${telefono}\n💬 ${mensaje}`;
+
+      await axios.post(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        chat_id: chatId,
+        text: texto,
+      });
+    } catch (error) {
+      console.error("❌ Error enviando respuesta del cajero a Telegram:", error.message);
+      telegramDelivered = false;
+    }
+
+    if (!telegramDelivered) return;
+
+    const socketId = connectedClients[telefono];
+    if (socketId) {
+      io.to(socketId).emit("mensaje", { autor: "Cajero", texto: mensaje, telefono });
+    }
   });
 
   socket.on("disconnect", () => {
