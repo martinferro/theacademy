@@ -202,6 +202,27 @@ app.get("/api/platform-links", (req, res) => {
   res.json({ ok: true, links });
 });
 
+app.get("/api/chats-activos", (req, res) => {
+  const sql = `
+    SELECT c.telefono, u.nombre, c.ultimo_mensaje, c.fecha_ultima
+    FROM chats c
+    LEFT JOIN usuarios u ON c.telefono = u.telefono
+    WHERE c.activo = 1
+    ORDER BY c.fecha_ultima DESC
+  `;
+
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      console.error("❌ Error al obtener chats activos:", err.message);
+      return res
+        .status(500)
+        .json({ ok: false, error: "No se pudieron obtener los chats activos" });
+    }
+
+    res.json({ ok: true, chats: rows });
+  });
+});
+
 // ===============================
 // AUTH - Verificación por SMS (Twilio)
 // ===============================
@@ -313,6 +334,10 @@ io.on("connection", (socket) => {
     if (!telefono || !mensaje) return;
 
     db.run("INSERT INTO mensajes (telefono, autor, mensaje) VALUES (?, ?, ?)", [telefono, "cajero", mensaje]);
+    db.run(
+      "UPDATE chats SET ultimo_mensaje = ?, fecha_ultima = CURRENT_TIMESTAMP WHERE telefono = ?",
+      [mensaje, telefono]
+    );
 
     let telegramDelivered = true;
     try {
