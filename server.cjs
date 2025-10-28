@@ -36,11 +36,59 @@ const fs = require("fs");
 // Ruta de la carpeta y archivo
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "theacademy.db");
+const platformLinksPath = path.join(dataDir, "platform-links.json");
+
+const defaultPlatformLinks = [
+  {
+    id: 1,
+    nombre: "Ganemos",
+    url: "https://ganemos.example.com",
+    activo: true,
+    orden: 1,
+  },
+  {
+    id: 2,
+    nombre: "Fichas Plus",
+    url: "https://fichasplus.example.com",
+    activo: true,
+    orden: 2,
+  },
+  {
+    id: 3,
+    nombre: "Recompensas 24/7",
+    url: "https://recompensas.example.com",
+    activo: true,
+    orden: 3,
+  },
+  {
+    id: 4,
+    nombre: "Club Élite",
+    url: "https://clubelite.example.com",
+    activo: true,
+    orden: 4,
+  },
+  {
+    id: 5,
+    nombre: "Banca Digital",
+    url: "https://bancadigital.example.com",
+    activo: false,
+    orden: 5,
+  },
+];
 
 // Crear carpeta si no existe
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
   console.log("📁 Carpeta 'data' creada automáticamente");
+}
+
+if (!fs.existsSync(platformLinksPath)) {
+  fs.writeFileSync(
+    platformLinksPath,
+    JSON.stringify(defaultPlatformLinks, null, 2),
+    "utf8"
+  );
+  console.log("🆕 Archivo 'platform-links.json' creado con enlaces por defecto");
 }
 
 // Crear conexión
@@ -116,6 +164,24 @@ db.serialize(() => {
 });
 
 
+function readPlatformLinks({ onlyActive = true } = {}) {
+  try {
+    const raw = fs.readFileSync(platformLinksPath, "utf8");
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter((item) => (onlyActive ? item.activo : true))
+      .sort((a, b) => {
+        const orderDiff = (a.orden ?? 0) - (b.orden ?? 0);
+        return orderDiff !== 0 ? orderDiff : a.nombre.localeCompare(b.nombre);
+      });
+  } catch (error) {
+    console.error("⚠️ No se pudieron leer los enlaces de plataformas:", error.message);
+    return defaultPlatformLinks.filter((item) => (onlyActive ? item.activo : true));
+  }
+}
+
+
 // ===============================
 // RUTAS BASE
 // ===============================
@@ -129,6 +195,11 @@ app.get("/cajero", (req, res) => {
 
 app.get("/chat-integrado", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "chat-embed.html"));
+});
+
+app.get("/api/platform-links", (req, res) => {
+  const links = readPlatformLinks();
+  res.json({ ok: true, links });
 });
 
 // ===============================

@@ -1,0 +1,37 @@
+[
+  {
+    "id": 1,
+    "nombre": "Ganemos",
+    "url": "https://ganemos.example.com",
+    "activo": true,
+    "orden": 1
+  },
+  {
+    "id": 2,
+    "nombre": "Fichas Plus",
+    "url": "https://fichasplus.example.com",
+    "activo": true,
+    "orden": 2
+  },
+  {
+    "id": 3,
+    "nombre": "Recompensas 24/7",
+    "url": "https://recompensas.example.com",
+    "activo": true,
+    "orden": 3
+  },
+  {
+    "id": 4,
+    "nombre": "Club Élite",
+    "url": "https://clubelite.example.com",
+    "activo": true,
+    "orden": 4
+  },
+  {
+    "id": 5,
+    "nombre": "Banca Digital",
+    "url": "https://bancadigital.example.com",
+    "activo": false,
+    "orden": 5
+  }
+]
