@@ -9,121 +9,6 @@
   </head>
   <body class="embed-view">
     <div class="split-layout">
-      <div class="chat-pane">
-        <main class="app-shell">
-          <aside class="onboarding" id="authSection">
-            <header class="brand">
-              <div class="logo-circle">ta</div>
-              <div>
-                <h1>theacademy</h1>
-                <p class="subtitle">Tu canal directo con el cajero.</p>
-              </div>
-            </header>
-
-            <section class="steps">
-              <h2>Verificación rápida</h2>
-              <ol class="stepper">
-                <li class="stepper-item">
-                  <span class="stepper-number">1</span>
-                  <div>
-                    <h3>Comparte tu número</h3>
-                    <p>Ingresa tu celular para enviarte un SMS de validación.</p>
-                  </div>
-                </li>
-                <li class="stepper-item">
-                  <span class="stepper-number">2</span>
-                  <div>
-                    <h3>Confirma el código</h3>
-                    <p>Escribe los 6 dígitos recibidos para desbloquear el chat.</p>
-                  </div>
-                </li>
-                <li class="stepper-item">
-                  <span class="stepper-number">3</span>
-                  <div>
-                    <h3>Conversa al instante</h3>
-                    <p>Habla con nuestro equipo en un entorno seguro.</p>
-                  </div>
-                </li>
-              </ol>
-            </section>
-
-            <form id="phoneForm" class="form-block" autocomplete="off">
-              <label for="phoneInput">Número de teléfono</label>
-              <div class="input-group">
-                <span class="input-prefix">📱</span>
-                <input
-                  id="phoneInput"
-                  name="phone"
-                  type="tel"
-                  inputmode="tel"
-                  placeholder="Ej. +5491124098501"
-                  required
-                />
-              </div>
-              <p class="help">Recibirás un SMS con un código de 6 dígitos.</p>
-              <button class="primary-button" type="submit">Enviar código</button>
-            </form>
-
-            <form id="codeForm" class="form-block" hidden autocomplete="one-time-code">
-              <label for="codeInput">Código de verificación</label>
-              <div class="input-group">
-                <span class="input-prefix">🔐</span>
-                <input
-                  id="codeInput"
-                  name="code"
-                  type="text"
-                  inputmode="numeric"
-                  pattern="\d{6}"
-                  maxlength="6"
-                  placeholder="Ingresa los 6 dígitos"
-                  required
-                />
-              </div>
-              <p class="help">Revisa tu SMS e ingresa el código recibido.</p>
-              <div class="form-actions">
-                <button class="secondary-button" type="button" id="resendButton">Reenviar código</button>
-                <button class="primary-button" type="submit">Validar código</button>
-              </div>
-            </form>
-          </aside>
-
-          <section id="chatSection" class="chat" hidden>
-            <header class="chat-header">
-              <div class="chat-contact">
-                <div class="avatar" aria-hidden="true">💬</div>
-                <div>
-                  <h2>Cajero virtual</h2>
-                  <p id="verifiedPhone" class="verified"></p>
-                </div>
-              </div>
-              <button class="secondary-button" id="logoutButton" type="button">Cerrar sesión</button>
-            </header>
-
-            <div class="chat-body">
-              <div id="messages" class="messages" role="log" aria-live="polite">
-                <div class="empty-state">
-                  <div class="empty-icon">💡</div>
-                  <p>Escribe tu primer mensaje y recibe asistencia inmediata.</p>
-                </div>
-              </div>
-            </div>
-
-            <form id="chatForm" class="chat-form" autocomplete="off">
-              <input
-                id="messageInput"
-                name="mensaje"
-                placeholder="Escribe un mensaje"
-                autocomplete="off"
-                required
-              />
-              <button class="primary-button" type="submit">Enviar</button>
-            </form>
-          </section>
-        </main>
-
-        <div id="alerts" class="alerts" role="status" aria-live="polite"></div>
-      </div>
-
       <aside class="reference-pane">
         <header class="reference-header">
           <h2>Referencia externa</h2>
@@ -136,127 +21,82 @@
   style="border:none;"
   loading="lazy">
 </iframe>
-
       </aside>
+    </div>
+
+    <div class="floating-chat" role="region" aria-label="Chat con cajero">
+      <header class="chat-header">
+        <div class="chat-contact">
+          <div class="avatar" aria-hidden="true">💬</div>
+          <div>
+            <h2>Cajero virtual</h2>
+            <p id="chatStatus" class="status-pill status-offline">Conectando...</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="chat-body">
+        <div id="messages" class="messages" role="log" aria-live="polite">
+          <div class="empty-state">
+            <div class="empty-icon">💡</div>
+            <p>Escribe tu primer mensaje y recibe asistencia inmediata.</p>
+          </div>
+        </div>
+      </div>
+
+      <form id="chatForm" class="chat-form" autocomplete="off">
+        <label class="sr-only" for="messageInput">Escribe un mensaje</label>
+        <input
+          id="messageInput"
+          name="mensaje"
+          placeholder="Escribe un mensaje"
+          autocomplete="off"
+          required
+        />
+        <button class="primary-button" type="submit">Enviar</button>
+      </form>
+
+      <div id="alerts" class="alerts" role="status" aria-live="polite"></div>
     </div>
 
     <script>
       const socket = io();
-      let telefonoVerificado = null;
-
-      const phoneForm = document.getElementById("phoneForm");
-      const codeForm = document.getElementById("codeForm");
-      const resendButton = document.getElementById("resendButton");
-      const chatSection = document.getElementById("chatSection");
       const alerts = document.getElementById("alerts");
-      const logoutButton = document.getElementById("logoutButton");
+      const statusPill = document.getElementById("chatStatus");
+      const messages = document.getElementById("messages");
+
+      const sessionId = (() => {
+        if (typeof crypto !== "undefined" && crypto.randomUUID) {
+          return `embed-${crypto.randomUUID()}`;
+        }
+        return `embed-${Date.now().toString(36)}-${Math.floor(Math.random() * 1_000_000)}`;
+      })();
 
       function showAlert(message, type = "info") {
         const alert = document.createElement("div");
-        alert.className = `alert ${type}`;
+        alert.className = `alert alert-${type}`;
         alert.textContent = message;
         alerts.appendChild(alert);
         setTimeout(() => alert.remove(), 4000);
       }
 
-      phoneForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const phone = document.getElementById("phoneInput").value.trim();
-        if (!phone) return showAlert("Ingresa un teléfono válido", "error");
+      function setStatus(text, variant) {
+        statusPill.textContent = text;
+        statusPill.classList.remove("status-online", "status-offline");
+        statusPill.classList.add(variant);
+      }
 
-        try {
-          const res = await fetch("/api/auth/request-code", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone }),
-          });
-
-          const data = await res.json();
-          if (data.ok) {
-            showAlert("Código enviado por SMS", "success");
-            phoneForm.hidden = true;
-            codeForm.hidden = false;
-            codeForm.dataset.phone = phone;
-            document.getElementById("codeInput").focus();
-          } else {
-            showAlert(data.error || "No se pudo enviar el código", "error");
-          }
-        } catch (error) {
-          showAlert("No se pudo enviar el código", "error");
-        }
+      socket.on("connect", () => {
+        socket.emit("registrarTelefono", sessionId);
+        setStatus("Conectado", "status-online");
       });
 
-      resendButton.addEventListener("click", async () => {
-        const phone = codeForm.dataset.phone || document.getElementById("phoneInput").value.trim();
-        if (!phone) return showAlert("Ingresa un teléfono válido antes de reenviar el código", "error");
-
-        resendButton.disabled = true;
-        try {
-          const res = await fetch("/api/auth/request-code", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone }),
-          });
-
-          const data = await res.json();
-          showAlert(data.ok ? "Nuevo código enviado" : "No se pudo reenviar el código", data.ok ? "success" : "error");
-        } catch (error) {
-          showAlert("No se pudo reenviar el código", "error");
-        } finally {
-          resendButton.disabled = false;
-        }
-      });
-
-      codeForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const code = document.getElementById("codeInput").value.trim();
-        const phone = codeForm.dataset.phone;
-
-        try {
-          const res = await fetch("/api/auth/verify-code", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone, code }),
-          });
-
-          const data = await res.json();
-          if (data.ok) {
-            telefonoVerificado = phone;
-            socket.emit("registrarTelefono", phone);
-            document.getElementById("verifiedPhone").textContent = `Teléfono verificado: ${phone}`;
-            document.getElementById("authSection").hidden = true;
-            chatSection.hidden = false;
-            showAlert("¡Teléfono verificado! Ya puedes chatear.", "success");
-          } else {
-            showAlert(data.error || "Código incorrecto", "error");
-          }
-        } catch (error) {
-          showAlert("No se pudo verificar el código", "error");
-        }
-      });
-
-      logoutButton.addEventListener("click", () => {
-        telefonoVerificado = null;
-        document.getElementById("authSection").hidden = false;
-        chatSection.hidden = true;
-        codeForm.hidden = true;
-        phoneForm.hidden = false;
-        phoneForm.reset();
-        codeForm.reset();
-        document.getElementById("messages").innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">💡</div>
-            <p>Escribe tu primer mensaje y recibe asistencia inmediata.</p>
-          </div>
-        `;
-        showAlert("Sesión cerrada", "info");
+      socket.on("disconnect", () => {
+        setStatus("Desconectado", "status-offline");
       });
 
       document.getElementById("chatForm").addEventListener("submit", async (e) => {
         e.preventDefault();
-        if (!telefonoVerificado) {
-          return showAlert("Verifica tu teléfono antes de enviar mensajes", "error");
-        }
 
         const input = document.getElementById("messageInput");
         const mensaje = input.value.trim();
@@ -265,11 +105,15 @@
         agregarMensaje("Tú", mensaje);
 
         try {
-          await fetch("/api/mensaje", {
+          const res = await fetch("/api/mensaje", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mensaje, telefono: telefonoVerificado }),
+            body: JSON.stringify({ mensaje, telefono: sessionId }),
           });
+
+          if (!res.ok) {
+            showAlert("No se pudo enviar el mensaje", "error");
+          }
         } catch (error) {
           showAlert("No se pudo enviar el mensaje", "error");
         }
@@ -277,20 +121,34 @@
         input.value = "";
       });
 
-      socket.on("mensaje", ({ autor, texto }) => {
-        agregarMensaje(autor, texto);
+      socket.on("mensaje", ({ autor, texto, telefono }) => {
+        if (telefono !== sessionId) return;
+        agregarMensaje(autor || "Cajero", texto);
       });
 
       function agregarMensaje(autor, texto) {
-        const chat = document.getElementById("messages");
-        const empty = chat.querySelector(".empty-state");
+        const empty = messages.querySelector(".empty-state");
         if (empty) empty.remove();
 
-        const msg = document.createElement("div");
-        msg.className = autor === "Tú" ? "msg-user" : "msg-bot";
-        msg.textContent = `${autor}: ${texto}`;
-        chat.appendChild(msg);
-        chat.scrollTop = chat.scrollHeight;
+        const row = document.createElement("div");
+        row.className = `message-row ${autor === "Tú" ? "sent" : "received"}`;
+
+        const bubble = document.createElement("div");
+        bubble.className = `bubble ${autor === "Tú" ? "bubble-user" : "bubble-agent"}`;
+
+        const authorEl = document.createElement("span");
+        authorEl.className = "bubble-author";
+        authorEl.textContent = autor;
+
+        const textEl = document.createElement("p");
+        textEl.className = "bubble-text";
+        textEl.textContent = texto;
+
+        bubble.appendChild(authorEl);
+        bubble.appendChild(textEl);
+        row.appendChild(bubble);
+        messages.appendChild(row);
+        messages.scrollTop = messages.scrollHeight;
       }
     </script>
   </body>
