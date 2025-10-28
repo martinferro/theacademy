@@ -459,48 +459,25 @@ input:focus {
    Vista combinada: chat + referencia
    =============================== */
 body.embed-view {
-  align-items: stretch;
-  justify-content: center;
-  padding: 1.5rem;
+  display: block;
+  padding: 0;
 }
 
 body.embed-view .split-layout {
-  display: grid;
-  gap: 1.5rem;
   width: min(1280px, 100%);
-  grid-template-columns: minmax(340px, 480px) 1fr;
-  min-height: calc(100vh - 3rem);
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 2rem) 8rem;
 }
 
-body.embed-view .chat-pane,
 body.embed-view .reference-pane {
   background: rgba(11, 20, 26, 0.82);
   border: 1px solid var(--panel-border);
   border-radius: 24px;
   backdrop-filter: blur(18px);
   box-shadow: 0 32px 60px rgba(0, 0, 0, 0.35);
-}
-
-body.embed-view .chat-pane {
-  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-}
-
-body.embed-view .chat-pane .app-shell {
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  background: transparent;
-}
-
-body.embed-view .reference-pane {
-  display: flex;
-  flex-direction: column;
-  padding: 1.5rem;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
   gap: 1rem;
 }
 
@@ -529,24 +506,80 @@ body.embed-view .reference-pane {
   border: none;
 }
 
+.floating-chat {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: min(380px, calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: clamp(1.1rem, 2.5vw, 1.5rem);
+  background: rgba(5, 12, 15, 0.85);
+  border-radius: 24px;
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+.status-pill {
+  display: inline-block;
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.25rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+.status-online {
+  background: rgba(37, 211, 102, 0.15);
+  color: var(--primary);
+}
+
+.status-offline {
+  background: rgba(255, 107, 107, 0.18);
+  color: var(--error);
+}
+
+.floating-chat .alerts {
+  margin-top: 0;
+  min-height: 1.25rem;
+}
+
+.floating-chat .alerts .alert + .alert {
+  margin-top: 0.5rem;
+}
+
 @media (max-width: 1024px) {
-  body.embed-view {
-    padding: 1rem;
-  }
-
   body.embed-view .split-layout {
-    grid-template-columns: 1fr;
-    min-height: auto;
-  }
-
-  body.embed-view .reference-pane {
-    min-height: 50vh;
+    padding: 1.5rem clamp(0.75rem, 4vw, 1.25rem) 7rem;
   }
 }
 
 @media (max-width: 720px) {
-  body.embed-view .chat-pane,
+  body.embed-view .split-layout {
+    padding: 1.25rem 1rem 6rem;
+  }
+
   body.embed-view .reference-pane {
     padding: 1.1rem;
+  }
+
+  .floating-chat {
+    right: 1rem;
+    left: 1rem;
+    bottom: 1rem;
+    width: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .floating-chat {
+    border-radius: 18px;
+    padding: 1rem;
+    gap: 1rem;
   }
 }
