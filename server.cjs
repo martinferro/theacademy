@@ -247,6 +247,38 @@ io.on("connection", (socket) => {
     }
   });
 });
+// ===============================
+// PROXY PARA EMBEBER SITIOS EXTERNOS BLOQUEADOS
+// ===============================
+const fetch = require("node-fetch");
+
+app.get("/embed/:sitio", async (req, res) => {
+  const siteMap = {
+    ganamos: "https://ganamos-ar.net/",
+    // Podés agregar más: ejemplo.com: "https://ejemplo.com/"
+  };
+
+  const target = siteMap[req.params.sitio];
+  if (!target) return res.status(404).send("Sitio no autorizado");
+
+  try {
+    const upstream = await fetch(target, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    let html = await upstream.text();
+
+    // Inserta <base> para que funcionen los recursos relativos (CSS, JS, imágenes)
+    const baseTag = `<base href="${target}">`;
+    html = html.replace(/<head[^>]*>/i, (m) => `${m}\n${baseTag}`);
+
+    // Elimina cabeceras que bloquean iframe (no se agregan al reenviar)
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  } catch (err) {
+    console.error("❌ Error al obtener página externa:", err.message);
+    res.status(500).send("No se pudo cargar el sitio remoto.");
+  }
+});
 
 // ===============================
 server.listen(PORT, () => {
