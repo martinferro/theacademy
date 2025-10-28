@@ -10,7 +10,6 @@ const axios = require("axios");
 const twilio = require("twilio");
 const http = require("http");
 const { Server } = require("socket.io");
-const sqlite3 = require("sqlite3").verbose();
 
 dotenv.config();
 const app = express();
@@ -28,13 +27,50 @@ app.use(express.static(path.join(__dirname, "public")));
 const PORT = process.env.PORT || 3000;
 
 // ===============================
-// BASE DE DATOS SQLITE
+// BASE DE DATOS SQLITE (auto-setup)
 // ===============================
-const dbPath = path.join(__dirname, "data", "theacademy.db");
+const sqlite3 = require("sqlite3").verbose();
+const fs = require("fs");
+
+
+// Ruta de la carpeta y archivo
+const dataDir = path.join(__dirname, "data");
+const dbPath = path.join(dataDir, "theacademy.db");
+
+// Crear carpeta si no existe
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  console.log("📁 Carpeta 'data' creada automáticamente");
+}
+
+// Crear conexión
 const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) console.error("❌ Error al abrir la base de datos:", err.message);
-  else console.log("✅ Conectado a la base de datos SQLite");
+  if (err) {
+    console.error("❌ Error al abrir la base de datos:", err.message);
+  } else {
+    console.log("✅ Base de datos abierta correctamente en:", dbPath);
+
+    // Crear estructura inicial si la DB está vacía
+    db.serialize(() => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS mensajes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          origen TEXT,
+          destino TEXT,
+          mensaje TEXT,
+          fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `, (err) => {
+        if (err) console.error("⚠️ Error creando tabla 'mensajes':", err.message);
+        else console.log("🗂️ Tabla 'mensajes' verificada o creada correctamente");
+      });
+    });
+  }
 });
+
+module.exports = db;
+
+
 
 // Crear tablas si no existen
 db.serialize(() => {
