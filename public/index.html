@@ -10,17 +10,21 @@
 
   <body>
     <main class="app-shell">
-      <aside class="onboarding" id="authSection">
+      <section class="chat-column">
         <header class="brand">
-          <div class="logo-circle">ta</div>
+          <div class="logo-circle" aria-hidden="true">ta</div>
           <div>
             <h1>theacademy</h1>
             <p class="subtitle">Tu canal directo con el cajero.</p>
           </div>
         </header>
 
-        <section class="steps">
+        <section id="authSection" class="card-block">
           <h2>Verificación rápida</h2>
+          <p class="muted">
+            Valida tu número de teléfono para habilitar el chat seguro con nuestro equipo.
+          </p>
+
           <ol class="stepper">
             <li class="stepper-item">
               <span class="stepper-number">1</span>
@@ -44,101 +48,190 @@
               </div>
             </li>
           </ol>
+
+          <form id="phoneForm" class="form-block" autocomplete="off">
+            <label for="phoneInput">Número de teléfono</label>
+            <div class="input-group">
+              <span class="input-prefix">📱</span>
+              <input
+                id="phoneInput"
+                name="phone"
+                type="tel"
+                inputmode="tel"
+                placeholder="Ej. +5491124098501"
+                required
+              />
+            </div>
+            <p class="help">Recibirás un SMS con un código de 6 dígitos.</p>
+            <button class="primary-button" type="submit">Enviar código</button>
+          </form>
+
+          <form id="codeForm" class="form-block" hidden autocomplete="one-time-code">
+            <label for="codeInput">Código de verificación</label>
+            <div class="input-group">
+              <span class="input-prefix">🔐</span>
+              <input
+                id="codeInput"
+                name="code"
+                type="text"
+                inputmode="numeric"
+                pattern="\d{6}"
+                maxlength="6"
+                placeholder="Ingresa los 6 dígitos"
+                required
+              />
+            </div>
+            <p class="help">Revisa tu SMS e ingresa el código recibido.</p>
+            <div class="form-actions">
+              <button class="secondary-button" type="button" id="resendButton">Reenviar código</button>
+              <button class="primary-button" type="submit">Validar código</button>
+            </div>
+          </form>
         </section>
 
-        <form id="phoneForm" class="form-block" autocomplete="off">
-          <label for="phoneInput">Número de teléfono</label>
-          <div class="input-group">
-            <span class="input-prefix">📱</span>
-            <input
-              id="phoneInput"
-              name="phone"
-              type="tel"
-              inputmode="tel"
-              placeholder="Ej. +5491124098501"
-              required
-            />
-          </div>
-          <p class="help">Recibirás un SMS con un código de 6 dígitos.</p>
-          <button class="primary-button" type="submit">Enviar código</button>
-        </form>
+        <section id="chatSection" class="chat card-block" hidden>
+          <header class="chat-header">
+            <div class="chat-contact">
+              <div class="avatar" aria-hidden="true">💬</div>
+              <div>
+                <h2>Cajero virtual</h2>
+                <p id="verifiedPhone" class="verified"></p>
+              </div>
+            </div>
+            <button class="secondary-button" id="logoutButton" type="button">Cerrar sesión</button>
+          </header>
 
-        <form id="codeForm" class="form-block" hidden autocomplete="one-time-code">
-          <label for="codeInput">Código de verificación</label>
-          <div class="input-group">
-            <span class="input-prefix">🔐</span>
-            <input
-              id="codeInput"
-              name="code"
-              type="text"
-              inputmode="numeric"
-              pattern="\d{6}"
-              maxlength="6"
-              placeholder="Ingresa los 6 dígitos"
-              required
-            />
-          </div>
-          <p class="help">Revisa tu SMS e ingresa el código recibido.</p>
-          <div class="form-actions">
-            <button class="secondary-button" type="button" id="resendButton">Reenviar código</button>
-            <button class="primary-button" type="submit">Validar código</button>
-          </div>
-        </form>
-      </aside>
-
-      <section id="chatSection" class="chat" hidden>
-        <header class="chat-header">
-          <div class="chat-contact">
-            <div class="avatar" aria-hidden="true">💬</div>
-            <div>
-              <h2>Cajero virtual</h2>
-              <p id="verifiedPhone" class="verified"></p>
+          <div class="chat-body">
+            <div id="messages" class="messages" role="log" aria-live="polite">
+              <div class="empty-state">
+                <div class="empty-icon">💡</div>
+                <p>Escribe tu primer mensaje y recibe asistencia inmediata.</p>
+              </div>
             </div>
           </div>
-          <button class="secondary-button" id="logoutButton" type="button">Cerrar sesión</button>
-        </header>
 
-        <div class="chat-body">
-          <div id="messages" class="messages" role="log" aria-live="polite">
-            <div class="empty-state">
-              <div class="empty-icon">💡</div>
-              <p>Escribe tu primer mensaje y recibe asistencia inmediata.</p>
-            </div>
-          </div>
-        </div>
-
-        <form id="chatForm" class="chat-form" autocomplete="off">
-          <input
-            id="messageInput"
-            name="mensaje"
-            placeholder="Escribe un mensaje"
-            autocomplete="off"
-            required
-          />
-          <button class="primary-button" type="submit">Enviar</button>
-        </form>
+          <form id="chatForm" class="chat-form" autocomplete="off">
+            <input
+              id="messageInput"
+              name="mensaje"
+              placeholder="Escribe un mensaje"
+              autocomplete="off"
+              required
+            />
+            <button class="primary-button" type="submit">Enviar</button>
+          </form>
+        </section>
       </section>
+
+      <aside class="support-column">
+        <section class="card-block quick-actions">
+          <h2>Acciones rápidas</h2>
+          <p class="muted">Selecciona una opción para comenzar la conversación.</p>
+          <div class="action-grid">
+            <button class="action-button" type="button" data-message-template="Hola, quiero comprar fichas.">
+              Comprar Fichas
+            </button>
+            <button class="action-button" type="button" data-message-template="Me gustaría solicitar mi recompensa.">
+              Solicitar recompensa
+            </button>
+            <button class="action-button" type="button" data-message-template="Necesito ayuda del equipo de soporte.">
+              Soporte
+            </button>
+          </div>
+        </section>
+
+        <section class="card-block platform-links-card">
+          <h2>Plataformas disponibles</h2>
+          <p id="platformLinksStatus" class="muted">Cargando enlaces...</p>
+          <ul id="platformLinksList" class="platform-links" aria-live="polite"></ul>
+        </section>
+      </aside>
     </main>
 
     <div id="alerts" class="alerts" role="status" aria-live="polite"></div>
 
-    <!-- ========================= -->
-    <!--  LÓGICA DEL FRONT-END     -->
-    <!-- ========================= -->
     <script>
       const socket = io();
       let telefonoVerificado = null;
 
-      // =============== 1️⃣ Solicitar código
       const phoneForm = document.getElementById("phoneForm");
       const codeForm = document.getElementById("codeForm");
       const resendButton = document.getElementById("resendButton");
       const chatSection = document.getElementById("chatSection");
+      const authSection = document.getElementById("authSection");
+      const alertsContainer = document.getElementById("alerts");
+      const actionButtons = document.querySelectorAll("[data-message-template]");
+      const platformLinksList = document.getElementById("platformLinksList");
+      const platformLinksStatus = document.getElementById("platformLinksStatus");
+
+      function showAlert(message, type = "info", timeout = 4000) {
+        alertsContainer.innerHTML = "";
+        if (!message) return;
+        const alert = document.createElement("div");
+        alert.className = `alert alert-${type}`;
+        alert.textContent = message;
+        alertsContainer.appendChild(alert);
+        if (timeout > 0) {
+          setTimeout(() => {
+            if (alertsContainer.contains(alert)) {
+              alert.classList.add("fade-out");
+              setTimeout(() => alert.remove(), 300);
+            }
+          }, timeout);
+        }
+      }
+
+      async function loadPlatformLinks() {
+        platformLinksList.innerHTML = "";
+        platformLinksStatus.textContent = "Cargando enlaces...";
+        try {
+          const response = await fetch("/api/platform-links");
+          const data = await response.json();
+          const links = Array.isArray(data.links) ? data.links : [];
+          if (data.ok && links.length) {
+            platformLinksStatus.textContent = "Accede a tus plataformas favoritas:";
+            links.forEach((link) => {
+              const item = document.createElement("li");
+              const anchor = document.createElement("a");
+              anchor.href = link.url;
+              anchor.target = "_blank";
+              anchor.rel = "noopener";
+              anchor.textContent = link.nombre;
+              item.appendChild(anchor);
+              platformLinksList.appendChild(item);
+            });
+          } else {
+            platformLinksStatus.textContent = "No hay plataformas disponibles por ahora.";
+          }
+        } catch (error) {
+          console.error("No se pudieron cargar los enlaces", error);
+          platformLinksStatus.textContent = "No pudimos cargar las plataformas. Intenta más tarde.";
+        }
+      }
+
+      loadPlatformLinks();
+
+      actionButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const template = button.dataset.messageTemplate || "";
+          if (chatSection.hidden) {
+            showAlert("Primero verifica tu número para usar el chat.", "info");
+            document.getElementById("phoneInput").focus();
+            return;
+          }
+          const input = document.getElementById("messageInput");
+          input.value = template;
+          input.focus();
+        });
+      });
 
       phoneForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const phone = document.getElementById("phoneInput").value.trim();
-        if (!phone) return alert("Ingresa un teléfono válido");
+        if (!phone) {
+          showAlert("Ingresa un teléfono válido", "error");
+          return;
+        }
 
         const res = await fetch("/api/auth/request-code", {
           method: "POST",
@@ -148,19 +241,22 @@
 
         const data = await res.json();
         if (data.ok) {
-          alert("Código enviado por SMS");
+          showAlert("Código enviado por SMS", "success");
           phoneForm.hidden = true;
           codeForm.hidden = false;
           codeForm.dataset.phone = phone;
           document.getElementById("codeInput").focus();
         } else {
-          alert("Error: " + (data.error || "No se pudo enviar el código"));
+          showAlert(data.error || "No se pudo enviar el código", "error");
         }
       });
 
       resendButton.addEventListener("click", async () => {
         const phone = codeForm.dataset.phone || document.getElementById("phoneInput").value.trim();
-        if (!phone) return alert("Ingresa un teléfono válido antes de reenviar el código");
+        if (!phone) {
+          showAlert("Ingresa un teléfono válido antes de reenviar el código", "error");
+          return;
+        }
 
         resendButton.disabled = true;
         try {
@@ -171,15 +267,14 @@
           });
 
           const data = await res.json();
-          alert(data.ok ? "Nuevo código enviado" : "No se pudo reenviar el código");
+          showAlert(data.ok ? "Nuevo código enviado" : "No se pudo reenviar el código", data.ok ? "success" : "error");
         } catch (error) {
-          alert("No se pudo reenviar el código");
+          showAlert("No se pudo reenviar el código", "error");
         } finally {
           resendButton.disabled = false;
         }
       });
 
-      // =============== 2️⃣ Verificar código
       codeForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const code = document.getElementById("codeInput").value.trim();
@@ -196,15 +291,15 @@
           telefonoVerificado = phone;
           socket.emit("registrarTelefono", phone);
           document.getElementById("verifiedPhone").textContent = `Teléfono verificado: ${phone}`;
-          document.getElementById("authSection").hidden = true;
+          authSection.hidden = true;
           chatSection.hidden = false;
           document.getElementById("messageInput").focus();
+          showAlert("¡Bienvenido al chat!", "success");
         } else {
-          alert("Código incorrecto");
+          showAlert("Código incorrecto", "error");
         }
       });
 
-      // =============== 3️⃣ Chat (enviar mensaje)
       const chatForm = document.getElementById("chatForm");
       chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -222,12 +317,10 @@
         });
       });
 
-      // =============== 4️⃣ Escuchar respuestas en tiempo real
       socket.on("mensaje", ({ autor, texto }) => {
         agregarMensaje(autor, texto);
       });
 
-      // =============== 5️⃣ Renderizar mensajes
       function agregarMensaje(autor, texto) {
         const chat = document.getElementById("messages");
         chat.querySelector(".empty-state")?.remove();
@@ -253,11 +346,10 @@
         chat.scrollTop = chat.scrollHeight;
       }
 
-      // =============== 6️⃣ Cerrar sesión
       document.getElementById("logoutButton").addEventListener("click", () => {
         telefonoVerificado = null;
         chatSection.hidden = true;
-        document.getElementById("authSection").hidden = false;
+        authSection.hidden = false;
         phoneForm.hidden = false;
         codeForm.hidden = true;
         codeForm.dataset.phone = "";
@@ -266,6 +358,7 @@
             <div class="empty-icon">💡</div>
             <p>Escribe tu primer mensaje y recibe asistencia inmediata.</p>
           </div>`;
+        showAlert("Sesión finalizada", "info");
       });
     </script>
   </body>

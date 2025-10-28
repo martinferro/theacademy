@@ -6,7 +6,7 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 $page = $_GET['page'] ?? 'dashboard';
-$allowedPages = ['dashboard', 'cajeros', 'alias'];
+$allowedPages = ['dashboard', 'cajeros', 'alias', 'platforms'];
 if (!in_array($page, $allowedPages, true)) {
     $page = 'dashboard';
 }
@@ -32,6 +32,7 @@ if (!in_array($page, $allowedPages, true)) {
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'dashboard' ? 'active' : ''; ?>" href="?page=dashboard">Dashboard</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'cajeros' ? 'active' : ''; ?>" href="?page=cajeros">Cajeros</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'alias' ? 'active' : ''; ?>" href="?page=alias">Alias Bancarios</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo $page === 'platforms' ? 'active' : ''; ?>" href="?page=platforms">Links a plataformas</a></li>
                 </ul>
                 <div class="d-flex align-items-center text-white">
                     <span class="me-3">Hola, <?php echo htmlspecialchars($_SESSION['admin_name']); ?></span>
@@ -50,6 +51,9 @@ if (!in_array($page, $allowedPages, true)) {
                 case 'alias':
                     include __DIR__ . '/views/alias.php';
                     break;
+                case 'platforms':
+                    include __DIR__ . '/views/platforms.php';
+                    break;
                 default:
                     include __DIR__ . '/dashboard.php';
                     break;
@@ -66,6 +70,8 @@ if (!in_array($page, $allowedPages, true)) {
     <script src="assets/js/cajeros.js"></script>
     <?php elseif ($page === 'alias'): ?>
     <script src="assets/js/alias.js"></script>
+    <?php elseif ($page === 'platforms'): ?>
+    <script src="assets/js/platforms.js"></script>
     <?php endif; ?>
 </body>
 </html>
