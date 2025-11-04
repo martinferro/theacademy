@@ -39,6 +39,29 @@ CREATE TABLE IF NOT EXISTS alias (
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Clientes table
+CREATE TABLE IF NOT EXISTS clientes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(120) NOT NULL,
+    email VARCHAR(120) UNIQUE,
+    telefono VARCHAR(30),
+    password_hash VARCHAR(255) NOT NULL,
+    categoria ENUM('VIP', 'REGULAR', 'ESPORADICO') DEFAULT 'ESPORADICO',
+    usa_categoria_auto TINYINT(1) DEFAULT 1,
+    alerta TINYINT(1) DEFAULT 0,
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Cliente interactions table
+CREATE TABLE IF NOT EXISTS cliente_interacciones (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cliente_id INT NOT NULL,
+    origen ENUM('chat_web', 'otro') DEFAULT 'chat_web',
+    contacto_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+);
+
 -- Pagos table
 CREATE TABLE IF NOT EXISTS pagos (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -64,6 +87,29 @@ VALUES
 ('ALIAS456', 8000, 1000, 1),
 ('ALIAS789', 12000, 0, 1)
 ON DUPLICATE KEY UPDATE monto_maximo = VALUES(monto_maximo);
+
+INSERT INTO clientes (nombre, email, telefono, password_hash, categoria, usa_categoria_auto, alerta)
+VALUES
+('Laura Martínez', 'laura@example.com', '+54 11 1234-5678', SHA2('cliente123', 256), 'REGULAR', 1, 0),
+('Diego Ramos', 'diego@example.com', '+54 9 351 555-4455', SHA2('seguro456', 256), 'VIP', 0, 1),
+('Tamara Ruiz', 'tamara@example.com', '+54 9 261 222-7788', SHA2('clave789', 256), 'ESPORADICO', 1, 0)
+ON DUPLICATE KEY UPDATE telefono = VALUES(telefono);
+
+INSERT INTO cliente_interacciones (cliente_id, origen, contacto_en)
+SELECT c.id, 'chat_web', NOW() - INTERVAL seq.day DAY
+FROM (
+    SELECT 0 AS day UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+) AS seq
+JOIN clientes c ON c.email = 'laura@example.com'
+ON DUPLICATE KEY UPDATE contacto_en = VALUES(contacto_en);
+
+INSERT INTO cliente_interacciones (cliente_id, origen, contacto_en)
+SELECT c.id, 'chat_web', NOW() - INTERVAL seq.day * 7 DAY
+FROM (
+    SELECT 0 AS day UNION ALL SELECT 1 UNION ALL SELECT 2
+) AS seq
+JOIN clientes c ON c.email = 'tamara@example.com'
+ON DUPLICATE KEY UPDATE contacto_en = VALUES(contacto_en);
 
 INSERT INTO pagos (cajero_id, fecha, monto, estado)
 SELECT c.id, CURDATE() - INTERVAL (ROW_NUMBER() OVER (ORDER BY c.id)) DAY, 1500 + (c.id * 250), 'confirmado'
