@@ -198,6 +198,26 @@ async function getClienteByNick(nick) {
   return queryOne("SELECT * FROM clientes WHERE nick = ?", [nick]);
 }
 
+async function getCajeroById(id) {
+  return queryOne(
+    "SELECT id, nombre, usuario, estado FROM cajeros WHERE id = ?",
+    [id]
+  );
+}
+
+async function ensureCajeroActivo(cajeroId) {
+  if (!cajeroId) return null;
+  const cajero = await getCajeroById(cajeroId);
+  if (!cajero) {
+    return null;
+  }
+  const estado = Number(cajero.estado);
+  if (!Number.isFinite(estado) || estado === 0) {
+    return null;
+  }
+  return cajero;
+}
+
 async function ensureClienteForPhone(telefono) {
   let cliente = await getClienteByTelefono(telefono);
   if (!cliente) {
@@ -287,15 +307,75 @@ async function requireCajeroAuth(req, res, next) {
     return res.status(401).json({ ok: false, error: "unauthorized" });
   }
 
-  req.sessionToken = token;
-  req.cajeroSession = session;
-  next();
+  try {
+    const cajero = await ensureCajeroActivo(session.cajeroId);
+    if (!cajero) {
+      sessionStore.revokeSession(token);
+      return res.status(403).json({ ok: false, error: "user_inactive" });
+    }
+
+    const updatedSession =
+      sessionStore.updateSession(token, {
+        nombre: cajero.nombre,
+        usuario: cajero.usuario,
+      }) || session;
+
+    req.sessionToken = token;
+    req.cajeroSession = updatedSession;
+    req.cajero = cajero;
+    next();
+  } catch (error) {
+    console.error("❌ Error validando sesión de cajero:", error.message);
+    res.status(500).json({ ok: false, error: "server_error" });
+  }
 }
 
 function safeNumber(value) {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function clearCajeroSocketState(socket) {
+  if (!socket.data) return;
+  socket.data.sessionType = null;
+  socket.data.cajeroId = null;
+  socket.data.cajeroNombre = null;
+  socket.data.sessionToken = null;
+}
+
+async function ensureCajeroSocketAuthorized(socket, ack) {
+  if (!socket.data || socket.data.sessionType !== "cajero" || !socket.data.cajeroId) {
+    if (typeof ack === "function") {
+      ack({ ok: false, error: "unauthorized" });
+    }
+    return null;
+  }
+
+  try {
+    const cajero = await ensureCajeroActivo(socket.data.cajeroId);
+    if (!cajero) {
+      if (socket.data.sessionToken) {
+        sessionStore.revokeSession(socket.data.sessionToken);
+      }
+      clearCajeroSocketState(socket);
+      socket.emit("cajero:auth-error", { error: "user_inactive" });
+      if (typeof ack === "function") {
+        ack({ ok: false, error: "user_inactive" });
+      }
+      return null;
+    }
+
+    socket.data.cajeroNombre = cajero.nombre;
+    return cajero;
+  } catch (error) {
+    console.error("❌ Error validando cajero activo:", error.message);
+    socket.emit("cajero:auth-error", { error: "server_error" });
+    if (typeof ack === "function") {
+      ack({ ok: false, error: "server_error" });
+    }
+    return null;
+  }
 }
 
 // ===============================
@@ -487,15 +567,31 @@ app.get("/api/auth/session", async (req, res) => {
   }
 
   if (session.type === "cajero") {
-    return res.json({
-      ok: true,
-      type: "cajero",
-      cajero: {
-        id: session.cajeroId,
-        nombre: session.nombre,
-        usuario: session.usuario,
-      },
-    });
+    try {
+      const cajero = await ensureCajeroActivo(session.cajeroId);
+      if (!cajero) {
+        sessionStore.revokeSession(token);
+        return res.status(403).json({ ok: false, error: "user_inactive" });
+      }
+
+      sessionStore.updateSession(token, {
+        nombre: cajero.nombre,
+        usuario: cajero.usuario,
+      });
+
+      return res.json({
+        ok: true,
+        type: "cajero",
+        cajero: {
+          id: cajero.id,
+          nombre: cajero.nombre,
+          usuario: cajero.usuario,
+        },
+      });
+    } catch (error) {
+      console.error("❌ Error verificando sesión de cajero:", error.message);
+      return res.status(500).json({ ok: false, error: "server_error" });
+    }
   }
 
   res.status(400).json({ ok: false, error: "unknown_session" });
@@ -772,22 +868,45 @@ io.on("connection", (socket) => {
   socket.on("cajero:auth", async ({ token }) => {
     const session = sessionStore.getSession(token);
     if (!session || session.type !== "cajero") {
+      clearCajeroSocketState(socket);
       socket.emit("cajero:auth-error", { error: "unauthorized" });
       return;
     }
 
-    socket.data.sessionType = "cajero";
-    socket.data.cajeroId = session.cajeroId;
-    socket.data.cajeroNombre = session.nombre;
-    socket.emit("cajero:ready", {
-      id: session.cajeroId,
-      nombre: session.nombre,
-    });
+    try {
+      const cajero = await ensureCajeroActivo(session.cajeroId);
+      if (!cajero) {
+        sessionStore.revokeSession(token);
+        clearCajeroSocketState(socket);
+        socket.emit("cajero:auth-error", { error: "user_inactive" });
+        return;
+      }
+
+      sessionStore.updateSession(token, {
+        nombre: cajero.nombre,
+        usuario: cajero.usuario,
+      });
+
+      socket.data.sessionType = "cajero";
+      socket.data.cajeroId = cajero.id;
+      socket.data.cajeroNombre = cajero.nombre;
+      socket.data.sessionToken = token;
+      socket.emit("cajero:ready", {
+        id: cajero.id,
+        nombre: cajero.nombre,
+      });
+    } catch (error) {
+      console.error("❌ Error autenticando cajero via socket:", error.message);
+      clearCajeroSocketState(socket);
+      socket.emit("cajero:auth-error", { error: "server_error" });
+    }
   });
 
   socket.on("abrirChat", async ({ telefono }) => {
-    if (socket.data.sessionType !== "cajero") return;
     if (!telefono) return;
+
+    const cajero = await ensureCajeroSocketAuthorized(socket);
+    if (!cajero) return;
 
     const thread = await fetchThreadByTelefono(telefono);
     if (!thread) {
@@ -804,9 +923,11 @@ io.on("connection", (socket) => {
   });
 
   socket.on("mensajeCajero", async ({ telefono, mensaje }) => {
-    if (socket.data.sessionType !== "cajero") return;
     const text = (mensaje || "").trim();
     if (!telefono || !text) return;
+
+    const cajero = await ensureCajeroSocketAuthorized(socket);
+    if (!cajero) return;
 
     try {
       const cliente = await getClienteByTelefono(telefono);
@@ -850,7 +971,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("asignarUsuario", async ({ telefono, nick }, ack) => {
-    if (socket.data.sessionType !== "cajero") return;
+    const cajero = await ensureCajeroSocketAuthorized(socket, ack);
+    if (!cajero) return;
+
     const normalizedPhone = authStore.normalizePhone(telefono);
     const desiredNick = (nick || "").trim();
     if (!normalizedPhone || !desiredNick) {
@@ -884,6 +1007,13 @@ io.on("connection", (socket) => {
       console.error("❌ Error asignando usuario via socket:", error.message);
       if (ack) ack({ ok: false, error: "server_error" });
     }
+  });
+
+  socket.on("cajero:logout", ({ token }) => {
+    if (token) {
+      sessionStore.revokeSession(token);
+    }
+    clearCajeroSocketState(socket);
   });
 
   socket.on("disconnect", () => {

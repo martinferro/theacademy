@@ -15,6 +15,7 @@ const msgInput = document.getElementById('msgInput');
 const actions = document.getElementById('actions');
 const btnPago = document.getElementById('btnPago');
 const btnAsignar = document.getElementById('btnAsignar');
+const btnLogout = document.getElementById('btnLogout');
 const messages = document.getElementById('messages');
 const emptyState = document.getElementById('emptyState');
 const chatSearch = document.getElementById('chatSearch');
@@ -240,12 +241,29 @@ function setToken(newToken) {
   }
 }
 
-function handleUnauthorized() {
+function handleUnauthorized(reason) {
+  const previousToken = token;
   token = null;
   cajeroInfo = null;
+  aliasDisponibles = [];
+  chatActivo = null;
+  chats.clear();
+  if (chatSearch) {
+    chatSearch.value = '';
+  }
+  chatList.innerHTML = '';
+  messages.innerHTML = '';
+  updateHeader();
+
+  if (previousToken) {
+    socket.emit('cajero:logout', { token: previousToken });
+  }
+
   sessionStorage.removeItem(TOKEN_KEY);
+  appShell.dataset.authenticated = 'false';
   loginOverlay.classList.remove('hidden');
   loginOverlay.removeAttribute('aria-hidden');
+  loginError.textContent = reason ? traducirError(reason) : '';
 }
 
 async function loginCajero(event) {
@@ -287,6 +305,14 @@ async function restaurarSesion() {
       headers: { Authorization: `Bearer ${stored}` },
     });
     const data = await response.json();
+    if (response.status === 401 || response.status === 403) {
+      sessionStorage.removeItem(TOKEN_KEY);
+      if (response.status === 403) {
+        loginError.textContent = traducirError(data.error || 'user_inactive');
+      }
+      return;
+    }
+
     if (!response.ok || !data.ok || data.type !== 'cajero') {
       sessionStorage.removeItem(TOKEN_KEY);
       return;
@@ -318,8 +344,8 @@ async function cargarChats() {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
-    if (response.status === 401) {
-      handleUnauthorized();
+    if (response.status === 401 || response.status === 403) {
+      handleUnauthorized(data.error || (response.status === 403 ? 'user_inactive' : 'unauthorized'));
       return;
     }
     if (!response.ok || !data.ok) throw new Error('chats');
@@ -342,8 +368,8 @@ async function cargarAlias() {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
-    if (response.status === 401) {
-      handleUnauthorized();
+    if (response.status === 401 || response.status === 403) {
+      handleUnauthorized(data.error || (response.status === 403 ? 'user_inactive' : 'unauthorized'));
       return;
     }
     if (!response.ok || !data.ok) throw new Error('alias');
@@ -359,6 +385,9 @@ function traducirError(code) {
     invalid_credentials: 'Usuario o contraseña incorrectos.',
     user_not_found: 'No encontramos el usuario ingresado.',
     user_inactive: 'Tu usuario está inactivo.',
+    unauthorized: 'Tu sesión expiró. Ingresá nuevamente.',
+    server_error: 'Tuvimos un problema inesperado. Intenta de nuevo.',
+    logged_out: 'Cerraste sesión correctamente.',
     nick_in_use: 'Ese NICK ya está asignado a otro cliente.',
     cliente_not_found: 'No encontramos el cliente.',
     alias_not_found: 'El alias seleccionado no existe.',
@@ -385,6 +414,24 @@ function seleccionarAlias() {
     return null;
   }
   return aliasDisponibles[idx];
+}
+
+async function logoutCajero() {
+  if (!token) {
+    handleUnauthorized('logged_out');
+    return;
+  }
+
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (error) {
+    console.error('Error cerrando sesión', error);
+  } finally {
+    handleUnauthorized('logged_out');
+  }
 }
 
 chatForm.addEventListener('submit', (event) => {
@@ -475,8 +522,14 @@ btnAsignar.addEventListener('click', () => {
   });
 });
 
-socket.on('cajero:auth-error', () => {
-  handleUnauthorized();
+if (btnLogout) {
+  btnLogout.addEventListener('click', () => {
+    logoutCajero();
+  });
+}
+
+socket.on('cajero:auth-error', ({ error } = {}) => {
+  handleUnauthorized(error || 'unauthorized');
 });
 
 socket.on('cajero:ready', () => {
