@@ -1,8 +1,11 @@
-// ===============================
-// cajero.js — Panel estilo WhatsApp
-// ===============================
+const TOKEN_KEY = 'theacademy.cajero.token';
 
 const socket = io();
+
+const loginOverlay = document.getElementById('cajeroLogin');
+const loginForm = document.getElementById('cajeroLoginForm');
+const loginError = document.getElementById('cajeroLoginError');
+const appShell = document.querySelector('.app-shell');
 
 const chatList = document.getElementById('chatList');
 const chatTitle = document.getElementById('chatTitle');
@@ -16,6 +19,9 @@ const messages = document.getElementById('messages');
 const emptyState = document.getElementById('emptyState');
 const chatSearch = document.getElementById('chatSearch');
 
+let token = null;
+let cajeroInfo = null;
+let aliasDisponibles = [];
 let chatActivo = null;
 const chats = new Map();
 
@@ -199,7 +205,7 @@ function pushMessage(telefono, autor, mensaje, timestamp = Date.now()) {
   chat.lastMessage = mensaje;
   chat.lastTimestamp = timestamp;
 
-  if (autor === 'usuario' && telefono !== chatActivo) {
+  if (autor === 'cliente' && telefono !== chatActivo) {
     chat.unread = (chat.unread || 0) + 1;
   }
 
@@ -221,45 +227,169 @@ function selectChat(telefono) {
   renderChatList(chatSearch.value);
   renderMessages(chat);
 
-  socket.emit('abrirChat', telefono);
+  socket.emit('abrirChat', { telefono });
 }
 
-// 📩 Recibe nuevos mensajes desde el backend
-socket.on('nuevoMensajeUsuario', ({ telefono, mensaje }) => {
-  pushMessage(telefono, 'usuario', mensaje);
-});
-
-// 📜 Cargar historial completo del chat activo
-socket.on('historialChat', (historial) => {
-  if (!chatActivo) return;
-  const chat = ensureChat(chatActivo);
-  const base = Date.now();
-  chat.messages = historial.map((msg, index) => ({
-    autor: msg.autor === 'cajero' ? 'cajero' : 'usuario',
-    mensaje: msg.mensaje,
-    timestamp: base + index,
-  }));
-
-  if (chat.messages.length) {
-    const last = chat.messages[chat.messages.length - 1];
-    chat.lastMessage = last.mensaje;
-    chat.lastTimestamp = last.timestamp;
+function setToken(newToken) {
+  token = newToken;
+  if (token) {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    socket.emit('cajero:auth', { token });
   } else {
-    chat.lastMessage = '';
-    chat.lastTimestamp = 0;
+    sessionStorage.removeItem(TOKEN_KEY);
   }
-  chat.unread = 0;
+}
 
-  updateHeader();
+function handleUnauthorized() {
+  token = null;
+  cajeroInfo = null;
+  sessionStorage.removeItem(TOKEN_KEY);
+  loginOverlay.classList.remove('hidden');
+  loginOverlay.removeAttribute('aria-hidden');
+}
+
+async function loginCajero(event) {
+  event.preventDefault();
+  const formData = new FormData(loginForm);
+  const payload = Object.fromEntries(formData.entries());
+
+  try {
+    const response = await fetch('/api/cajero/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      loginError.textContent = traducirError(data.error || 'invalid_credentials');
+      return;
+    }
+
+    cajeroInfo = data.cajero;
+    setToken(data.token);
+    loginOverlay.classList.add('hidden');
+    loginOverlay.setAttribute('aria-hidden', 'true');
+    appShell.dataset.authenticated = 'true';
+    await cargarInicial();
+    loginError.textContent = '';
+  } catch (error) {
+    console.error(error);
+    loginError.textContent = 'No pudimos iniciar sesión. Intenta nuevamente.';
+  }
+}
+
+async function restaurarSesion() {
+  const stored = sessionStorage.getItem(TOKEN_KEY);
+  if (!stored) return;
+
+  try {
+    const response = await fetch('/api/auth/session', {
+      headers: { Authorization: `Bearer ${stored}` },
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok || data.type !== 'cajero') {
+      sessionStorage.removeItem(TOKEN_KEY);
+      return;
+    }
+
+    token = stored;
+    cajeroInfo = data.cajero;
+    socket.emit('cajero:auth', { token });
+    loginOverlay.classList.add('hidden');
+    loginOverlay.setAttribute('aria-hidden', 'true');
+    appShell.dataset.authenticated = 'true';
+    await cargarInicial();
+  } catch (error) {
+    console.error(error);
+    sessionStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+async function cargarInicial() {
+  await Promise.all([cargarChats(), cargarAlias()]);
   renderChatList(chatSearch.value);
-  renderMessages(chat);
-});
+  updateHeader();
+}
 
-// 📤 Enviar respuesta del cajero
+async function cargarChats() {
+  if (!token) return;
+  try {
+    const response = await fetch('/api/cajero/chats', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (response.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+    if (!response.ok || !data.ok) throw new Error('chats');
+
+    data.chats.forEach((item) => {
+      const chat = ensureChat(item.telefono);
+      chat.displayName = item.nick || item.telefono;
+      chat.lastMessage = item.ultimoMensaje || '';
+      chat.lastTimestamp = item.fechaUltima ? new Date(item.fechaUltima).getTime() : 0;
+    });
+  } catch (error) {
+    console.error('Error cargando chats', error);
+  }
+}
+
+async function cargarAlias() {
+  if (!token) return;
+  try {
+    const response = await fetch('/api/cajero/alias', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (response.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+    if (!response.ok || !data.ok) throw new Error('alias');
+    aliasDisponibles = data.alias.filter((item) => Number(item.activo));
+  } catch (error) {
+    console.error('Error cargando alias', error);
+    aliasDisponibles = [];
+  }
+}
+
+function traducirError(code) {
+  const map = {
+    invalid_credentials: 'Usuario o contraseña incorrectos.',
+    user_not_found: 'No encontramos el usuario ingresado.',
+    user_inactive: 'Tu usuario está inactivo.',
+    nick_in_use: 'Ese NICK ya está asignado a otro cliente.',
+    cliente_not_found: 'No encontramos el cliente.',
+    alias_not_found: 'El alias seleccionado no existe.',
+    invalid_request: 'Revisa los datos ingresados.',
+  };
+  return map[code] || 'Ocurrió un error inesperado.';
+}
+
+function seleccionarAlias() {
+  if (!aliasDisponibles.length) {
+    alert('No hay alias activos configurados. Contactá al administrador.');
+    return null;
+  }
+
+  const opciones = aliasDisponibles
+    .map((alias, index) => `${index + 1}. ${alias.alias} (máx $${Number(alias.montoMaximo).toFixed(2)})`)
+    .join('\n');
+
+  const seleccion = prompt(`Selecciona un alias ingresando el número correspondiente:\n${opciones}`);
+  if (!seleccion) return null;
+  const idx = Number.parseInt(seleccion, 10) - 1;
+  if (!Number.isInteger(idx) || idx < 0 || idx >= aliasDisponibles.length) {
+    alert('Selección inválida.');
+    return null;
+  }
+  return aliasDisponibles[idx];
+}
+
 chatForm.addEventListener('submit', (event) => {
   event.preventDefault();
   if (!chatActivo) return;
-
   const texto = msgInput.value.trim();
   if (!texto) return;
 
@@ -269,7 +399,6 @@ chatForm.addEventListener('submit', (event) => {
   msgInput.focus();
 });
 
-// 🧭 Seleccionar chat desde la lista
 chatList.addEventListener('click', (event) => {
   const item = event.target.closest('.chat-item[data-phone]');
   if (!item) return;
@@ -277,36 +406,51 @@ chatList.addEventListener('click', (event) => {
   selectChat(item.dataset.phone);
 });
 
-// 🔍 Buscador en la lista de conversaciones
 chatSearch.addEventListener('input', (event) => {
   renderChatList(event.target.value);
 });
 
-// ===============================
-// 💰 Función: Solicitar Pago
-// ===============================
-btnPago.addEventListener('click', () => {
+btnPago.addEventListener('click', async () => {
   if (!chatActivo) {
     alert('Selecciona un chat primero.');
     return;
   }
 
-  const monto = prompt('Ingresa el monto a cobrar (en ARS):');
-  if (!monto || Number.isNaN(Number(monto))) {
+  const alias = seleccionarAlias();
+  if (!alias) return;
+
+  const montoStr = prompt('Ingresa el monto a cobrar (en ARS):');
+  if (!montoStr) return;
+  const monto = Number(montoStr);
+  if (!Number.isFinite(monto) || monto <= 0) {
     alert('Monto inválido.');
     return;
   }
 
-  const linkPago = `https://ejemplo-pago.com/pagar?monto=${monto}&cliente=${encodeURIComponent(chatActivo)}`;
-  const texto = `🔗 Solicitud de pago: ${monto} ARS\nHacé clic para pagar:\n${linkPago}`;
+  try {
+    const response = await fetch('/api/cajero/solicitar-pago', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ telefono: chatActivo, monto, aliasId: alias.id }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      alert(traducirError(data.error || 'invalid_request'));
+      return;
+    }
 
-  pushMessage(chatActivo, 'cajero', texto);
-  socket.emit('mensajeCajero', { telefono: chatActivo, mensaje: texto });
+    const texto = `🔔 Solicitud de pago: $${monto.toFixed(2)} - Alias ${alias.alias}`;
+    pushMessage(chatActivo, 'cajero', texto);
+    alert('Solicitud enviada correctamente.');
+  } catch (error) {
+    console.error(error);
+    alert('No pudimos generar la solicitud de pago.');
+  }
 });
 
-// ===============================
-// 👤 Función: Asignar Usuario
-// ===============================
 btnAsignar.addEventListener('click', () => {
   if (!chatActivo) {
     alert('Selecciona un chat primero.');
@@ -319,15 +463,86 @@ btnAsignar.addEventListener('click', () => {
     return;
   }
 
-  const chat = ensureChat(chatActivo);
-  chat.displayName = nombre.trim();
-  pushMessage(chatActivo, 'cajero', `📛 Se asignó el usuario "${chat.displayName}" a ${chatActivo}.`);
-  updateHeader();
-  socket.emit('asignarUsuario', { telefono: chatActivo, nombre: chat.displayName });
+  socket.emit('asignarUsuario', { telefono: chatActivo, nick: nombre.trim() }, (response) => {
+    if (!response?.ok) {
+      alert(traducirError(response?.error));
+      return;
+    }
+    const chat = ensureChat(chatActivo);
+    chat.displayName = response.cliente.nick;
+    pushMessage(chatActivo, 'cajero', `📛 Se asignó el usuario "${response.cliente.nick}" a ${chatActivo}.`);
+    updateHeader();
+  });
 });
 
-// ===============================
-// Estado inicial
-// ===============================
-updateHeader();
+socket.on('cajero:auth-error', () => {
+  handleUnauthorized();
+});
+
+socket.on('cajero:ready', () => {
+  // Conexión autenticada
+});
+
+socket.on('cajero:nuevoMensaje', ({ telefono, nick, mensaje, fecha, autor }) => {
+  const chat = ensureChat(telefono);
+  chat.displayName = nick || chat.displayName || telefono;
+
+  const timestamp = fecha ? new Date(fecha).getTime() : Date.now();
+  const sender = autor === 'cajero' ? 'cajero' : 'cliente';
+
+  const last = chat.messages[chat.messages.length - 1];
+  if (
+    sender === 'cajero' &&
+    last &&
+    last.autor === 'cajero' &&
+    last.mensaje === mensaje &&
+    Math.abs((last.timestamp || 0) - timestamp) < 1500
+  ) {
+    return;
+  }
+
+  pushMessage(telefono, sender, mensaje, timestamp);
+  if (!chatActivo) {
+    renderChatList(chatSearch.value);
+  }
+});
+
+socket.on('cajero:cliente-actualizado', ({ telefono, nick }) => {
+  const chat = ensureChat(telefono);
+  chat.displayName = nick || telefono;
+  if (telefono === chatActivo) {
+    updateHeader();
+  }
+  renderChatList(chatSearch.value);
+});
+
+socket.on('historialChat', ({ telefono, nick, mensajes: historial }) => {
+  if (!telefono) return;
+  const chat = ensureChat(telefono);
+  chat.displayName = nick || chat.displayName || telefono;
+  chat.messages = (historial || []).map((msg) => ({
+    autor: msg.autor === 'cajero' ? 'cajero' : 'cliente',
+    mensaje: msg.mensaje,
+    timestamp: msg.fecha ? new Date(msg.fecha).getTime() : Date.now(),
+  }));
+  if (chat.messages.length) {
+    const last = chat.messages[chat.messages.length - 1];
+    chat.lastMessage = last.mensaje;
+    chat.lastTimestamp = last.timestamp;
+  } else {
+    chat.lastMessage = '';
+    chat.lastTimestamp = 0;
+  }
+
+  if (telefono === chatActivo) {
+    renderMessages(chat);
+    updateHeader();
+  }
+  renderChatList(chatSearch.value);
+});
+
+loginForm.addEventListener('submit', loginCajero);
+
+restaurarSesion();
 renderChatList();
+updateHeader();
