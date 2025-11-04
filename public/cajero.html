@@ -33,7 +33,7 @@
       box-sizing: border-box;
     }
 
-    body {
+  body {
       margin: 0;
       min-height: 100vh;
       background: var(--app-bg);
@@ -42,6 +42,85 @@
       align-items: center;
       justify-content: center;
       padding: clamp(1.25rem, 3vh, 3rem);
+    }
+
+    .cajero-login {
+      position: fixed;
+      inset: 0;
+      background: rgba(11, 20, 26, 0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: opacity 0.25s ease;
+    }
+
+    .cajero-login.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .cajero-login-card {
+      background: rgba(17, 27, 33, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 24px;
+      padding: 2rem;
+      width: min(360px, 90vw);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .cajero-login-card h1 {
+      margin: 0;
+      font-size: 1.6rem;
+    }
+
+    .cajero-login-card label {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .cajero-login-card input {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(11, 20, 26, 0.8);
+      color: var(--text);
+      padding: 0.8rem 1rem;
+      font-size: 1rem;
+    }
+
+    .cajero-login-card button {
+      margin-top: 0.5rem;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .muted {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin: 0;
+    }
+
+    .primary-button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.9rem 1.4rem;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      background: linear-gradient(135deg, rgba(0, 168, 132, 0.95), rgba(37, 211, 102, 0.95));
+      color: #0b141a;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .primary-button:hover,
+    .primary-button:focus-visible {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 30px rgba(0, 168, 132, 0.35);
+      outline: none;
     }
 
     .app-shell {
@@ -573,7 +652,27 @@
 </head>
 
 <body>
-  <div class="app-shell">
+  <div id="cajeroLogin" class="cajero-login" role="dialog" aria-modal="true">
+    <form id="cajeroLoginForm" class="cajero-login-card" autocomplete="off">
+      <h1>Panel de cajero</h1>
+      <p class="muted">Accede con tu usuario y contraseña asignados.</p>
+      <label for="cajeroUsuario">Usuario</label>
+      <input id="cajeroUsuario" name="usuario" placeholder="Ej. jperez" required autocomplete="username" />
+      <label for="cajeroPassword">Contraseña</label>
+      <input
+        id="cajeroPassword"
+        name="password"
+        type="password"
+        required
+        autocomplete="current-password"
+        placeholder="Ingresa tu contraseña"
+      />
+      <button class="primary-button" type="submit">Ingresar</button>
+      <p id="cajeroLoginError" class="muted" aria-live="polite"></p>
+    </form>
+  </div>
+
+  <div class="app-shell" data-authenticated="false">
     <aside class="sidebar">
       <div class="sidebar-top">
         <div class="brand">
