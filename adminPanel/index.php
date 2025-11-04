@@ -33,11 +33,7 @@ if (!in_array($page, $allowedPages, true)) {
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'cajeros' ? 'active' : ''; ?>" href="?page=cajeros">Cajeros</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'alias' ? 'active' : ''; ?>" href="?page=alias">Alias Bancarios</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'platforms' ? 'active' : ''; ?>" href="?page=platforms">Links a plataformas</a></li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo $page === 'clientes' ? 'active' : ''; ?>" href="?page=clientes">
-                            Clientes <span class="badge text-bg-info ms-1">Nuevo</span>
-                        </a>
-                    </li>
+                    <li class="nav-item"><a class="nav-link <?php echo $page === 'clientes' ? 'active' : ''; ?>" href="?page=clientes">Clientes</a></li>
                 </ul>
                 <div class="d-flex align-items-center text-white">
                     <span class="me-3">Hola, <?php echo htmlspecialchars($_SESSION['admin_name']); ?></span>
