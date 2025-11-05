@@ -6,6 +6,8 @@ const loginOverlay = document.getElementById('cajeroLogin');
 const loginForm = document.getElementById('cajeroLoginForm');
 const loginError = document.getElementById('cajeroLoginError');
 const appShell = document.querySelector('.app-shell');
+const workspace = document.querySelector('.cajero-workspace');
+const whatsappPanel = document.querySelector('.whatsapp-central-card');
 
 const chatList = document.getElementById('chatList');
 const chatTitle = document.getElementById('chatTitle');
@@ -25,6 +27,19 @@ let cajeroInfo = null;
 let aliasDisponibles = [];
 let chatActivo = null;
 const chats = new Map();
+
+function updateLayoutAuthenticatedState(isAuthenticated) {
+  const state = isAuthenticated ? 'true' : 'false';
+  if (appShell) {
+    appShell.dataset.authenticated = state;
+  }
+  if (workspace) {
+    workspace.dataset.authenticated = state;
+  }
+  if (whatsappPanel) {
+    whatsappPanel.dataset.authenticated = state;
+  }
+}
 
 function normalizeText(value) {
   if (!value) return '';
@@ -260,7 +275,7 @@ function handleUnauthorized(reason) {
   }
 
   sessionStorage.removeItem(TOKEN_KEY);
-  appShell.dataset.authenticated = 'false';
+  updateLayoutAuthenticatedState(false);
   loginOverlay.classList.remove('hidden');
   loginOverlay.removeAttribute('aria-hidden');
   loginError.textContent = reason ? traducirError(reason) : '';
@@ -287,7 +302,7 @@ async function loginCajero(event) {
     setToken(data.token);
     loginOverlay.classList.add('hidden');
     loginOverlay.setAttribute('aria-hidden', 'true');
-    appShell.dataset.authenticated = 'true';
+    updateLayoutAuthenticatedState(true);
     await cargarInicial();
     loginError.textContent = '';
   } catch (error) {
@@ -323,7 +338,7 @@ async function restaurarSesion() {
     socket.emit('cajero:auth', { token });
     loginOverlay.classList.add('hidden');
     loginOverlay.setAttribute('aria-hidden', 'true');
-    appShell.dataset.authenticated = 'true';
+    updateLayoutAuthenticatedState(true);
     await cargarInicial();
   } catch (error) {
     console.error(error);
