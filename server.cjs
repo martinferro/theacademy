@@ -16,12 +16,17 @@ const crypto = require("crypto");
 const authStore = require("./lib/authStore");
 const sessionStore = require("./lib/sessionStore");
 const smsService = require("./services/smsService");
+const whatsappCentral = require("./services/whatsappCentral");
+const integrateMultiWhatsapp = require("./services/multi_whatsapp");
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
+
+whatsappCentral.attach(io);
+integrateMultiWhatsapp(whatsappCentral);
 
 app.use(cors());
 app.use(express.json());
@@ -836,12 +841,37 @@ app.post("/api/cajero/solicitar-pago", requireCajeroAuth, async (req, res) => {
   }
 });
 
+app.get("/api/whatsapp/messages", requireCajeroAuth, (req, res) => {
+  const lineaRaw = req.query.linea ?? req.query.line;
+  const linea = typeof lineaRaw === "string" ? lineaRaw.trim() : "";
+  const limitParam = req.query.limit ?? req.query.limite;
+  const parsedLimit = parseInt(limitParam, 10);
+  const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 250) : 120;
+
+  if (!linea) {
+    return res.status(400).json({ ok: false, error: "missing_line" });
+  }
+
+  try {
+    const mensajes = whatsappCentral.getMessages(linea, limit);
+    return res.json({ ok: true, linea, mensajes });
+  } catch (error) {
+    if (error.message === "line_not_found") {
+      return res.status(404).json({ ok: false, error: "line_not_found" });
+    }
+    console.error("❌ Error recuperando historial de WhatsApp:", error);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
 // ===============================
 // Integración con Socket.IO
 // ===============================
 const connectedClients = new Map(); // telefono -> socketId
 
 io.on("connection", (socket) => {
+  whatsappCentral.registerSocket(socket);
+
   socket.on("cliente:auth", async ({ token }) => {
     const session = sessionStore.getSession(token);
     if (!session || session.type !== "cliente") {
