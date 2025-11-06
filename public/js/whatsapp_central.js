@@ -11,6 +11,84 @@
   const statusElement = document.getElementById('whatsappLineaEstado');
   const feedbackElement = document.getElementById('whatsappFeedback');
 
+  function getStoredToken() {
+    try {
+      return sessionStorage.getItem(TOKEN_KEY);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function fetchWhatsappResource(kind, lineId) {
+    const token = getStoredToken();
+    const endpoints = [];
+
+    if (kind === 'messages') {
+      const query = lineId ? `?linea=${encodeURIComponent(lineId)}` : '';
+      endpoints.push({
+        url: `/api/whatsapp/messages${query}`,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } else if (kind === 'lines') {
+      endpoints.push({
+        url: '/api/whatsapp/lines',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    }
+
+    const fallbackBases = ['/adminPanel/backend/whatsapp_messages.php', '/adminpanel/backend/whatsapp_messages.php'];
+    fallbackBases.forEach((base) => {
+      const url = kind === 'messages' && lineId ? `${base}?linea=${encodeURIComponent(lineId)}` : base;
+      endpoints.push({ url, headers: {} });
+    });
+
+    let lastError = null;
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint.url, { headers: endpoint.headers });
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            lastError = Object.assign(new Error('unauthorized'), { status: response.status });
+            continue;
+          }
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch (parseError) {
+            // ignored
+          }
+          const error = new Error(`http_${response.status}`);
+          error.status = response.status;
+          error.payload = payload;
+          lastError = error;
+          continue;
+        }
+
+        const data = await response.json();
+        if (data && data.ok === false) {
+          const error = new Error(data.error || 'server_error');
+          error.payload = data;
+          if (data.error === 'line_not_found' || data.error === 'store_not_found') {
+            lastError = error;
+            continue;
+          }
+          lastError = error;
+          continue;
+        }
+
+        return data;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (lastError) {
+      throw lastError;
+    }
+    throw new Error('request_failed');
+  }
+
   if (!linesList || !chatContainer || !sendForm) {
     return;
   }
@@ -240,32 +318,16 @@
     clearFeedback();
 
     try {
-      const headers = {};
-      try {
-        const token = sessionStorage.getItem(TOKEN_KEY);
-        if (token) {
-          headers.Authorization = `Bearer ${token}`;
-        }
-      } catch (error) {
-        // sessionStorage may be unavailable in some contexts
-      }
-
-      const response = await fetch(`/api/whatsapp/messages?linea=${encodeURIComponent(lineId)}`, {
-        headers,
-      });
-      const data = await response.json();
-      if (response.status === 401 || response.status === 403) {
+      const data = await fetchWhatsappResource('messages', lineId);
+      const mensajes = Array.isArray(data?.mensajes) ? data.mensajes : [];
+      currentMessages = mensajes.map(normalizeMessage);
+      renderMessages();
+    } catch (error) {
+      if (error && (error.status === 401 || error.status === 403)) {
         renderFeedback('Tu sesión de cajero expiró. Inicia sesión nuevamente.');
         setFormDisabled(true);
         return;
       }
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || 'server_error');
-      }
-      const mensajes = Array.isArray(data.mensajes) ? data.mensajes : [];
-      currentMessages = mensajes.map(normalizeMessage);
-      renderMessages();
-    } catch (error) {
       console.error('No se pudo obtener el historial de WhatsApp', error);
       renderEmptyConversation('No pudimos cargar el historial. Intenta nuevamente.');
       renderFeedback('No pudimos cargar el historial de la línea seleccionada.');
@@ -307,6 +369,30 @@
       updateStatus(line);
     }
     renderLines();
+  }
+
+  async function initializeLines() {
+    try {
+      const data = await fetchWhatsappResource('lines');
+      const lineas = Array.isArray(data?.lineas) ? data.lineas : Array.isArray(data?.lines) ? data.lines : [];
+      lineas.forEach((line) => {
+        if (!line?.id) return;
+        const current = lineMap.get(line.id) || { id: line.id, unread: 0 };
+        const merged = {
+          ...current,
+          ...line,
+          unread: current.unread ?? 0,
+        };
+        lineMap.set(line.id, merged);
+      });
+      renderLines();
+      if (!selectedLine && lineas.length) {
+        selectLine(lineas[0].id);
+      }
+    } catch (error) {
+      console.warn('No se pudieron obtener las líneas iniciales de WhatsApp', error);
+      renderLines();
+    }
   }
 
   sendForm.addEventListener('submit', (event) => {
@@ -356,6 +442,8 @@
       renderFeedback('No pudimos emitir el mensaje por socket.');
     }
   });
+
+  initializeLines();
 
   socket.on('connect', () => {
     socket.emit('whatsapp:subscribe');

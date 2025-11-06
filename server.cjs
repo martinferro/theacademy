@@ -841,6 +841,16 @@ app.post("/api/cajero/solicitar-pago", requireCajeroAuth, async (req, res) => {
   }
 });
 
+app.get("/api/whatsapp/lines", requireCajeroAuth, (req, res) => {
+  try {
+    const lineas = whatsappCentral.getLines();
+    return res.json({ ok: true, lineas });
+  } catch (error) {
+    console.error("❌ Error listando líneas de WhatsApp:", error);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
 app.get("/api/whatsapp/messages", requireCajeroAuth, (req, res) => {
   const lineaRaw = req.query.linea ?? req.query.line;
   const linea = typeof lineaRaw === "string" ? lineaRaw.trim() : "";
