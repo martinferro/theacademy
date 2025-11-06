@@ -17,3 +17,21 @@ body {
 .badge-turno {
     text-transform: capitalize;
 }
+
+.whatsapp-admin-line-list {
+    max-height: 70vh;
+}
+
+.whatsapp-admin-line-list #whatsappAdminLineListEmpty {
+    color: rgba(233, 237, 239, 0.75);
+}
+
+.whatsapp-admin-card {
+    min-height: 460px !important;
+}
+
+@media (max-width: 767.98px) {
+    .whatsapp-admin-card {
+        min-height: 400px !important;
+    }
+}
