@@ -15,6 +15,33 @@ const DEFAULT_LINES = (process.env.WHATSAPP_LINES || '')
     { id: 'soporte', nombre: 'Soporte' },
   ]);
 
+const VALID_STATES = new Set(['connected', 'connecting', 'disconnected']);
+
+function normalizeLineId(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    return '';
+  }
+  const raw = String(value).trim();
+  if (!raw) return '';
+  const normalized = raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9.-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (normalized) return normalized;
+  return raw.replace(/\s+/g, '_');
+}
+
+function sanitizeDisplayName(value, fallback) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return fallback;
+}
+
 class WhatsappCentral extends EventEmitter {
   constructor() {
     super();
@@ -41,8 +68,13 @@ class WhatsappCentral extends EventEmitter {
       socket.emit('whatsapp:nuevoMensaje', payload);
     };
 
+    const lineListener = (payload) => {
+      socket.emit('whatsapp:lineaActualizada', payload);
+    };
+
     this.on('estadoLinea', statusListener);
     this.on('nuevoMensaje', messageListener);
+    this.on('lineaActualizada', lineListener);
 
     socket.on('whatsapp:subscribe', emitInitial);
     emitInitial();
@@ -61,24 +93,27 @@ class WhatsappCentral extends EventEmitter {
     });
 
     const handleSend = (payload = {}, ack) => {
-      if (!payload.linea || !payload.body) {
+      const lineId = normalizeLineId(payload.linea || payload.line || payload.id);
+      const bodyRaw = typeof payload.body === 'string' ? payload.body : String(payload.body ?? '');
+      const body = bodyRaw.trim();
+      if (!lineId || !body) {
         const response = { ok: false, error: 'Solicitud inválida.' };
         if (typeof ack === 'function') ack(response);
         return;
       }
 
       try {
-        const message = this.appendMessage(payload.linea, {
+        const message = this.appendMessage(lineId, {
           direction: 'outgoing',
-          body: payload.body,
+          body,
           to: payload.to || null,
           timestamp: new Date().toISOString(),
         });
 
         this.emit('salida:enviar', {
-          linea: payload.linea,
+          linea: lineId,
           to: payload.to || null,
-          body: payload.body,
+          body,
           metadata: payload.metadata || {},
         });
 
@@ -103,25 +138,84 @@ class WhatsappCentral extends EventEmitter {
 
     socket.on('whatsapp:enviarMensaje', handleSend);
 
+    socket.on('whatsapp:registrarEntrante', (payload = {}, ack) => {
+      const respond = typeof ack === 'function' ? ack : () => {};
+      const lineId = normalizeLineId(payload.linea || payload.line || payload.id);
+      const bodyRaw = typeof payload.body === 'string' ? payload.body : String(payload.body ?? '');
+      const body = bodyRaw.trim();
+      if (!lineId || !body) {
+        respond({ ok: false, error: 'missing_parameters' });
+        return;
+      }
+
+      try {
+        const message = this.registerIncoming(lineId, {
+          body,
+          from: payload.from ?? null,
+          to: payload.to ?? null,
+          timestamp: payload.timestamp || new Date().toISOString(),
+          metadata: payload.metadata || {},
+        });
+        respond({ ok: true, mensaje: message, linea: lineId });
+      } catch (error) {
+        respond({ ok: false, error: error.message === 'line_not_found' ? 'line_not_found' : 'register_failed' });
+      }
+    });
+
+    socket.on('whatsapp:actualizarEstado', (payload = {}, ack) => {
+      const respond = typeof ack === 'function' ? ack : () => {};
+      const lineId = normalizeLineId(payload.linea || payload.line || payload.id);
+      if (!lineId) {
+        respond({ ok: false, error: 'missing_line' });
+        return;
+      }
+
+      const desired = typeof payload.estado === 'string' ? payload.estado.trim().toLowerCase() : '';
+      const estado = VALID_STATES.has(desired) ? desired : 'connected';
+
+      try {
+        const status = this.setLineStatus(lineId, estado, payload.metadata || {}, { silent: false });
+        respond({ ok: true, linea: lineId, estado: status.estado, lineaActualizada: this.getLine(lineId) });
+      } catch (error) {
+        respond({ ok: false, error: error.message === 'line_not_found' ? 'line_not_found' : 'update_failed' });
+      }
+    });
+
+    socket.on('whatsapp:upsertLinea', (payload = {}, ack) => {
+      const respond = typeof ack === 'function' ? ack : () => {};
+      const lineId = normalizeLineId(payload.id || payload.linea || payload.line);
+      if (!lineId) {
+        respond({ ok: false, error: 'missing_line' });
+        return;
+      }
+
+      const nombre = sanitizeDisplayName(payload.nombre, this.#inferDisplayName(lineId));
+
+      try {
+        const updated = this.upsertLine(lineId, { nombre }, { silent: false });
+        respond({ ok: true, linea: lineId, lineaActualizada: updated });
+      } catch (error) {
+        respond({ ok: false, error: error.message === 'line_not_found' ? 'line_not_found' : 'upsert_failed' });
+      }
+    });
+
     socket.on('disconnect', () => {
       this.off('estadoLinea', statusListener);
       this.off('nuevoMensaje', messageListener);
+      this.off('lineaActualizada', lineListener);
     });
   }
 
   getLines() {
     const lines = this.store?.lines || {};
-    return Object.values(lines).map((line) => {
-      const messages = Array.isArray(line.mensajes) ? line.mensajes : [];
-      const lastMessage = messages.length ? messages[messages.length - 1] : null;
-      return {
-        id: line.id,
-        nombre: line.nombre || line.id,
-        estado: line.estado || 'disconnected',
-        ultimaConexion: line.ultimaConexion || null,
-        ultimoMensaje: lastMessage ? this.#formatMessage(lastMessage) : null,
-      };
-    });
+    return Object.values(lines).map((line) => this.#serializeLine(line));
+  }
+
+  getLine(lineId) {
+    if (!lineId) return null;
+    const lines = this.store?.lines || {};
+    if (!lines[lineId]) return null;
+    return this.#serializeLine(lines[lineId]);
   }
 
   getMessages(lineId, limit = 100) {
@@ -163,6 +257,7 @@ class WhatsappCentral extends EventEmitter {
       }
       this.emit('nuevoMensaje', payload);
     }
+    this.#broadcastLine(lineId, options);
     return formatted;
   }
 
@@ -171,7 +266,7 @@ class WhatsappCentral extends EventEmitter {
     if (!line) {
       throw new Error('line_not_found');
     }
-    line.estado = estado || line.estado || 'disconnected';
+    line.estado = VALID_STATES.has(estado) ? estado : line.estado || 'disconnected';
     if (metadata.ultimaConexion) {
       line.ultimaConexion = metadata.ultimaConexion;
     } else if (estado === 'connected') {
@@ -193,6 +288,8 @@ class WhatsappCentral extends EventEmitter {
       this.emit('estadoLinea', payload);
     }
 
+    this.#broadcastLine(lineId, options);
+
     return payload;
   }
 
@@ -202,6 +299,30 @@ class WhatsappCentral extends EventEmitter {
 
   registerOutgoing(lineId, message) {
     return this.appendMessage(lineId, { ...message, direction: 'outgoing' });
+  }
+
+  upsertLine(lineId, updates = {}, options = {}) {
+    const line = this.#ensureLine(lineId, true);
+    if (!line) {
+      throw new Error('line_not_found');
+    }
+
+    if (typeof updates.nombre === 'string' && updates.nombre.trim()) {
+      line.nombre = updates.nombre.trim();
+    }
+
+    if (typeof updates.estado === 'string' && VALID_STATES.has(updates.estado)) {
+      line.estado = updates.estado;
+    }
+
+    if (updates.ultimaConexion) {
+      line.ultimaConexion = updates.ultimaConexion;
+    }
+
+    this.store.lines[lineId] = line;
+    this.#save();
+
+    return this.#broadcastLine(lineId, options);
   }
 
   #ensureLine(lineId, autoCreate = false) {
@@ -263,6 +384,34 @@ class WhatsappCentral extends EventEmitter {
       status: message.status ?? null,
       metadata: message.metadata || {},
     };
+  }
+
+  #serializeLine(line) {
+    if (!line) return null;
+    const messages = Array.isArray(line.mensajes) ? line.mensajes : [];
+    const lastMessage = messages.length ? messages[messages.length - 1] : null;
+    return {
+      id: line.id,
+      nombre: line.nombre || this.#inferDisplayName(line.id),
+      estado: VALID_STATES.has(line.estado) ? line.estado : 'disconnected',
+      ultimaConexion: line.ultimaConexion || null,
+      ultimoMensaje: lastMessage ? this.#formatMessage(lastMessage) : null,
+    };
+  }
+
+  #broadcastLine(lineId, options = {}) {
+    if (!lineId) return null;
+    const line = this.store?.lines?.[lineId];
+    if (!line) return null;
+    const serialized = this.#serializeLine(line);
+    if (!options.silent) {
+      const payload = { linea: lineId, lineaActualizada: serialized };
+      if (this.io) {
+        this.io.emit('whatsapp:lineaActualizada', payload);
+      }
+      this.emit('lineaActualizada', payload);
+    }
+    return serialized;
   }
 
   #load() {
