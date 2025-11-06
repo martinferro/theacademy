@@ -880,8 +880,6 @@ app.get("/api/whatsapp/messages", requireCajeroAuth, (req, res) => {
 const connectedClients = new Map(); // telefono -> socketId
 
 io.on("connection", (socket) => {
-  whatsappCentral.registerSocket(socket);
-
   socket.on("cliente:auth", async ({ token }) => {
     const session = sessionStore.getSession(token);
     if (!session || session.type !== "cliente") {
@@ -931,6 +929,12 @@ io.on("connection", (socket) => {
       socket.data.cajeroId = cajero.id;
       socket.data.cajeroNombre = cajero.nombre;
       socket.data.sessionToken = token;
+      if (!socket.data.whatsappRegistered) {
+        whatsappCentral.registerSocket(socket);
+        socket.data.whatsappRegistered = true;
+      } else {
+        socket.emit("whatsapp:lineas", { lineas: whatsappCentral.getLines() });
+      }
       socket.emit("cajero:ready", {
         id: cajero.id,
         nombre: cajero.nombre,

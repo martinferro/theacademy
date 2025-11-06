@@ -29,15 +29,41 @@ class WhatsappCentral extends EventEmitter {
   }
 
   registerSocket(socket) {
+    const isAuthorized = () =>
+      Boolean(socket?.data && socket.data.sessionType === 'cajero' && socket.data.cajeroId);
+
+    const ensureAuthorized = (ack) => {
+      if (isAuthorized()) {
+        return true;
+      }
+
+      if (typeof ack === 'function') {
+        ack({ ok: false, error: 'unauthorized' });
+      } else {
+        socket.emit('whatsapp:error', { message: 'No autorizado.' });
+      }
+
+      return false;
+    };
+
     const emitInitial = () => {
+      if (!ensureAuthorized()) {
+        return;
+      }
       socket.emit('whatsapp:lineas', { lineas: this.getLines() });
     };
 
     const statusListener = (payload) => {
+      if (!isAuthorized()) {
+        return;
+      }
       socket.emit('whatsapp:estadoLinea', payload);
     };
 
     const messageListener = (payload) => {
+      if (!isAuthorized()) {
+        return;
+      }
       socket.emit('whatsapp:nuevoMensaje', payload);
     };
 
@@ -48,6 +74,9 @@ class WhatsappCentral extends EventEmitter {
     emitInitial();
 
     socket.on('whatsapp:solicitarHistorial', ({ linea, limit }) => {
+      if (!ensureAuthorized()) {
+        return;
+      }
       if (!linea) return;
       try {
         const mensajes = this.getMessages(linea, limit);
@@ -61,6 +90,9 @@ class WhatsappCentral extends EventEmitter {
     });
 
     const handleSend = (payload = {}, ack) => {
+      if (!ensureAuthorized(ack)) {
+        return;
+      }
       if (!payload.linea || !payload.body) {
         const response = { ok: false, error: 'Solicitud inválida.' };
         if (typeof ack === 'function') ack(response);
@@ -96,6 +128,9 @@ class WhatsappCentral extends EventEmitter {
     };
 
     socket.on('enviarMensaje', (payload, ack) => {
+      if (!ensureAuthorized(ack)) {
+        return;
+      }
       if (payload && payload.linea) {
         handleSend(payload, ack);
       }
@@ -106,6 +141,9 @@ class WhatsappCentral extends EventEmitter {
     socket.on('disconnect', () => {
       this.off('estadoLinea', statusListener);
       this.off('nuevoMensaje', messageListener);
+      if (socket?.data) {
+        socket.data.whatsappRegistered = false;
+      }
     });
   }
 
