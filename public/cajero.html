@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Panel de Cajero - theacademy</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/css/whatsapp_central.css" />
   <script src="/socket.io/socket.io.js"></script>
 
   <style>
@@ -39,7 +40,7 @@
       background: var(--app-bg);
       color: var(--text);
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
       padding: clamp(1.25rem, 3vh, 3rem);
     }
@@ -124,7 +125,8 @@
     }
 
     .app-shell {
-      width: min(1180px, 96vw);
+      width: 100%;
+      max-width: none;
       height: min(780px, 94vh);
       display: grid;
       grid-template-columns: 360px 1fr;
@@ -672,69 +674,122 @@
     </form>
   </div>
 
-  <div class="app-shell" data-authenticated="false">
-    <aside class="sidebar">
-      <div class="sidebar-top">
-        <div class="brand">
-          <div class="brand-avatar">TA</div>
-          <div class="brand-heading">
-            <span>CENTRO DE RESPUESTAS</span>
-            <strong>Chats activos</strong>
+  <div class="cajero-workspace grid grid-cols-2 gap-4" data-authenticated="false">
+    <div class="internal-chat-column">
+      <div class="app-shell" data-authenticated="false">
+        <aside class="sidebar">
+          <div class="sidebar-top">
+            <div class="brand">
+              <div class="brand-avatar">TA</div>
+              <div class="brand-heading">
+                <span>CENTRO DE RESPUESTAS</span>
+                <strong>Chats activos</strong>
+              </div>
+            </div>
+            <div class="sidebar-top-actions">
+              <button class="icon-btn" type="button" title="Marcar como leído">✔</button>
+              <button class="icon-btn" type="button" title="Nuevo chat">＋</button>
+              <button
+                class="icon-btn"
+                type="button"
+                id="btnLogout"
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+              >⎋</button>
+            </div>
+          </div>
+          <div class="sidebar-search">
+            <label class="search-field">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.71.71l.27.28v.79l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"></path>
+              </svg>
+              <input id="chatSearch" type="search" placeholder="Buscar por nombre asignado o teléfono" autocomplete="off" />
+            </label>
+          </div>
+          <p class="sidebar-section-title">Chats recientes</p>
+          <div class="sidebar-scroll">
+            <ul id="chatList" class="chat-list"></ul>
+          </div>
+        </aside>
+
+        <section class="chat-panel">
+          <header class="chat-header">
+            <div class="chat-header-info">
+              <h2 id="chatTitle">Selecciona un chat</h2>
+              <p id="chatSubtitle">El historial aparecerá aquí cuando abras una conversación</p>
+            </div>
+            <div class="actions hidden" id="actions">
+              <button id="btnPago" class="action-btn">💰 Solicitar Pago</button>
+              <button id="btnAsignar" class="action-btn secondary">👤 Asignar Usuario</button>
+            </div>
+          </header>
+
+          <div class="conversation-body">
+            <div id="emptyState" class="empty-state">
+              <h3>Bienvenido al panel</h3>
+              <p>Seleccioná un chat de la lista para continuar la conversación con tus clientes en tiempo real.</p>
+            </div>
+            <div id="messages" class="messages hidden"></div>
+          </div>
+
+          <form id="chatForm" class="hidden">
+            <input id="msgInput" placeholder="Escribe una respuesta..." autocomplete="off" />
+            <button type="submit">Enviar ✉️</button>
+          </form>
+        </section>
+      </div>
+    </div>
+
+    <section
+      class="whatsapp-central-card"
+      data-authenticated="false"
+      aria-labelledby="whatsappCentralTitle"
+    >
+      <div class="whatsapp-central-header">
+        <h2 id="whatsappCentralTitle">Centralizador WhatsApp</h2>
+        <p class="whatsapp-central-subtitle">
+          Administra en tiempo real las líneas conectadas y responde mensajes desde una única vista.
+        </p>
+      </div>
+      <div class="whatsapp-central-body">
+        <aside id="listaLineas" class="whatsapp-lines" aria-label="Líneas activas"></aside>
+        <div class="whatsapp-chat" aria-live="polite">
+          <header class="whatsapp-chat-header">
+            <div class="whatsapp-chat-header-text">
+              <h3 id="whatsappLineaTitulo">Selecciona una línea</h3>
+              <p id="whatsappLineaMeta">El historial aparecerá aquí al elegir una línea activa.</p>
+            </div>
+            <span id="whatsappLineaEstado" class="status-badge status-badge--offline">Desconectado</span>
+          </header>
+          <div id="chatWhatsApp" class="whatsapp-chat-messages">
+            <div class="whatsapp-empty">Selecciona una línea para ver su conversación.</div>
           </div>
         </div>
-        <div class="sidebar-top-actions">
-          <button class="icon-btn" type="button" title="Marcar como leído">✔</button>
-          <button class="icon-btn" type="button" title="Nuevo chat">＋</button>
-          <button
-            class="icon-btn"
-            type="button"
-            id="btnLogout"
-            title="Cerrar sesión"
-            aria-label="Cerrar sesión"
-          >⎋</button>
-        </div>
       </div>
-      <div class="sidebar-search">
-        <label class="search-field">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.71.71l.27.28v.79l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"></path>
-          </svg>
-          <input id="chatSearch" type="search" placeholder="Buscar por nombre asignado o teléfono" autocomplete="off" />
-        </label>
-      </div>
-      <p class="sidebar-section-title">Chats recientes</p>
-      <div class="sidebar-scroll">
-        <ul id="chatList" class="chat-list"></ul>
-      </div>
-    </aside>
-
-    <section class="chat-panel">
-      <header class="chat-header">
-        <div class="chat-header-info">
-          <h2 id="chatTitle">Selecciona un chat</h2>
-          <p id="chatSubtitle">El historial aparecerá aquí cuando abras una conversación</p>
-        </div>
-        <div class="actions hidden" id="actions">
-          <button id="btnPago" class="action-btn">💰 Solicitar Pago</button>
-          <button id="btnAsignar" class="action-btn secondary">👤 Asignar Usuario</button>
-        </div>
-      </header>
-
-      <div class="conversation-body">
-        <div id="emptyState" class="empty-state">
-          <h3>Bienvenido al panel</h3>
-          <p>Seleccioná un chat de la lista para continuar la conversación con tus clientes en tiempo real.</p>
-        </div>
-        <div id="messages" class="messages hidden"></div>
-      </div>
-
-      <form id="chatForm" class="hidden">
-        <input id="msgInput" placeholder="Escribe una respuesta..." autocomplete="off" />
-        <button type="submit">Enviar ✉️</button>
+      <form id="whatsappSendForm" class="whatsapp-form" autocomplete="off">
+        <label class="sr-only" for="numeroDestino">Número destino</label>
+        <input
+          id="numeroDestino"
+          name="numeroDestino"
+          placeholder="Número destino"
+          class="whatsapp-input whatsapp-input--to"
+          autocomplete="off"
+        />
+        <label class="sr-only" for="mensajeEnviar">Mensaje</label>
+        <input
+          id="mensajeEnviar"
+          name="mensaje"
+          placeholder="Escribe un mensaje..."
+          class="whatsapp-input whatsapp-input--body"
+          autocomplete="off"
+        />
+        <button id="btnEnviar" type="submit" class="whatsapp-send">Enviar</button>
       </form>
+      <p id="whatsappFeedback" class="whatsapp-feedback" aria-live="assertive"></p>
     </section>
   </div>
 
   <script src="/cajero.js"></script>
+  <script src="/js/whatsapp_central.js"></script>
 </body>
 </html>

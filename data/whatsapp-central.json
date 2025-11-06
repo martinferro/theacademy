@@ -1,0 +1,25 @@
+{
+  "lines": {
+    "cajero1": {
+      "id": "cajero1",
+      "nombre": "Cajero 1",
+      "estado": "disconnected",
+      "ultimaConexion": null,
+      "mensajes": []
+    },
+    "cajero2": {
+      "id": "cajero2",
+      "nombre": "Cajero 2",
+      "estado": "disconnected",
+      "ultimaConexion": null,
+      "mensajes": []
+    },
+    "soporte": {
+      "id": "soporte",
+      "nombre": "Soporte",
+      "estado": "disconnected",
+      "ultimaConexion": null,
+      "mensajes": []
+    }
+  }
+}
