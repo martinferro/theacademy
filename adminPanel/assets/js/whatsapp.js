@@ -28,6 +28,10 @@
     const openWebButton = document.getElementById('whatsappAdminOpenWeb');
     const openSplitButton = document.getElementById('whatsappAdminOpenSplit');
 
+    const sessionGrid = document.getElementById('whatsappAdminSessionGrid');
+    const sessionGridEmpty = document.getElementById('whatsappAdminSessionGridEmpty');
+    const openAllWebButton = document.getElementById('whatsappAdminOpenAllWeb');
+
     const createForm = document.getElementById('whatsappAdminCreateForm');
     const createIdInput = document.getElementById('whatsappAdminLineId');
     const createNameInput = document.getElementById('whatsappAdminLineName');
@@ -49,6 +53,8 @@
         socketReady: false,
         pendingHistory: null,
     };
+
+    const sessionWindows = new Map();
 
     function normalizeLine(line) {
         if (!line || !line.id) return null;
@@ -85,6 +91,39 @@
             state.messages.set(lineId, []);
         }
         return state.messages.get(lineId);
+    }
+
+    function getStatusLabel(estado) {
+        switch (estado) {
+            case 'connected':
+                return 'Conectado';
+            case 'connecting':
+                return 'Conectando';
+            default:
+                return 'Desconectado';
+        }
+    }
+
+    function getStatusBadgeClass(estado) {
+        switch (estado) {
+            case 'connected':
+                return 'status-badge--online';
+            case 'connecting':
+                return 'status-badge--connecting';
+            default:
+                return 'status-badge--offline';
+        }
+    }
+
+    function getSortedLines() {
+        return Array.from(state.lines.values()).sort((a, b) => {
+            const timeA = a.ultimoMensaje ? new Date(a.ultimoMensaje.timestamp).getTime() : 0;
+            const timeB = b.ultimoMensaje ? new Date(b.ultimoMensaje.timestamp).getTime() : 0;
+            if (timeA === timeB) {
+                return a.nombre.localeCompare(b.nombre, 'es');
+            }
+            return timeB - timeA;
+        });
     }
 
     function showFeedback(message, type = 'info') {
@@ -158,6 +197,22 @@
         }
     }
 
+    function describeLineMeta(line) {
+        if (!line) {
+            return 'Sin actividad registrada';
+        }
+        if (line.ultimoMensaje) {
+            const metaTime = formatMessageMeta(line.ultimoMensaje);
+            const body = String(line.ultimoMensaje.body || '');
+            const truncatedBody = body.length > 80 ? `${body.slice(0, 77)}…` : body;
+            return metaTime ? `${metaTime} · ${truncatedBody}` : truncatedBody || 'Sin actividad registrada.';
+        }
+        if (line.ultimaConexion) {
+            return formatLastConnection(line) || 'Sin actividad reciente';
+        }
+        return 'Sin actividad registrada';
+    }
+
     function updateCurrentLineInfo() {
         const line = state.selectedLine ? state.lines.get(state.selectedLine) : null;
         if (!line) {
@@ -229,7 +284,7 @@
 
     function renderLineList() {
         if (!lineList) return;
-        const lines = Array.from(state.lines.values());
+        const lines = getSortedLines();
 
         const existingItems = lineList.querySelectorAll('button[data-line-id]');
         existingItems.forEach((node) => node.remove());
@@ -249,53 +304,143 @@
             lineListEmpty.classList.add('d-none');
         }
 
-        lines
-            .sort((a, b) => {
-                const timeA = a.ultimoMensaje ? new Date(a.ultimoMensaje.timestamp).getTime() : 0;
-                const timeB = b.ultimoMensaje ? new Date(b.ultimoMensaje.timestamp).getTime() : 0;
-                if (timeA === timeB) {
-                    return a.nombre.localeCompare(b.nombre, 'es');
-                }
-                return timeB - timeA;
-            })
-            .forEach((line) => {
-                const item = document.createElement('button');
-                item.type = 'button';
-                item.className = `line-item w-100 text-start ${line.id === state.selectedLine ? 'line-item--active' : ''}`;
-                item.dataset.lineId = line.id;
+        lines.forEach((line) => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = `line-item w-100 text-start ${line.id === state.selectedLine ? 'line-item--active' : ''}`;
+            item.dataset.lineId = line.id;
 
-                const header = document.createElement('div');
-                header.className = 'line-item-header';
+            const header = document.createElement('div');
+            header.className = 'line-item-header';
 
-                const titleGroup = document.createElement('div');
-                titleGroup.className = 'line-item-titlegroup';
+            const titleGroup = document.createElement('div');
+            titleGroup.className = 'line-item-titlegroup';
 
-                const title = document.createElement('span');
-                title.className = 'line-title';
-                title.textContent = line.nombre;
+            const title = document.createElement('span');
+            title.className = 'line-title';
+            title.textContent = line.nombre;
 
-                const badge = document.createElement('span');
-                badge.className = `status-badge ${line.estado === 'connected' ? 'status-badge--online' : 'status-badge--offline'}`;
-                badge.textContent = line.estado === 'connected' ? 'Conectado' : line.estado === 'connecting' ? 'Conectando' : 'Desconectado';
+            const badge = document.createElement('span');
+            const statusClass = getStatusBadgeClass(line.estado);
+            badge.className = `status-badge ${statusClass}`;
+            badge.textContent = getStatusLabel(line.estado);
 
-                titleGroup.append(title);
-                header.append(titleGroup, badge);
-                item.append(header);
+            titleGroup.append(title);
+            header.append(titleGroup, badge);
+            item.append(header);
 
-                const meta = document.createElement('span');
-                meta.className = 'line-meta';
-                if (line.ultimoMensaje) {
-                    const metaTime = formatMessageMeta(line.ultimoMensaje);
-                    meta.textContent = metaTime ? `${metaTime} · ${line.ultimoMensaje.body}` : line.ultimoMensaje.body;
-                } else if (line.ultimaConexion) {
-                    meta.textContent = formatLastConnection(line) || 'Sin actividad reciente';
-                } else {
-                    meta.textContent = 'Sin actividad registrada';
-                }
-                item.append(meta);
+            const meta = document.createElement('span');
+            meta.className = 'line-meta';
+            meta.textContent = describeLineMeta(line);
+            item.append(meta);
 
-                lineList.append(item);
+            lineList.append(item);
+        });
+
+        renderSessionGrid(lines);
+    }
+
+    function renderSessionGrid(sortedLines) {
+        if (!sessionGrid) return;
+        sessionGrid.innerHTML = '';
+
+        const lines = Array.isArray(sortedLines) ? sortedLines.slice(0, 8) : getSortedLines().slice(0, 8);
+
+        if (!lines.length) {
+            if (sessionGridEmpty) {
+                sessionGridEmpty.classList.remove('d-none');
+            }
+            return;
+        }
+
+        if (sessionGridEmpty) {
+            sessionGridEmpty.classList.add('d-none');
+        }
+
+        lines.forEach((line) => {
+            const card = document.createElement('article');
+            card.className = `whatsapp-session-card${line.id === state.selectedLine ? ' whatsapp-session-card--active' : ''}`;
+            card.dataset.lineId = line.id;
+
+            const header = document.createElement('div');
+            header.className = 'whatsapp-session-header';
+
+            const title = document.createElement('h3');
+            title.className = 'whatsapp-session-title';
+            title.textContent = line.nombre;
+
+            const badge = document.createElement('span');
+            badge.className = `status-badge ${getStatusBadgeClass(line.estado)}`;
+            badge.textContent = getStatusLabel(line.estado);
+
+            header.append(title, badge);
+            card.append(header);
+
+            const meta = document.createElement('p');
+            meta.className = 'whatsapp-session-meta';
+            meta.textContent = describeLineMeta(line);
+            card.append(meta);
+
+            const preview = document.createElement('div');
+            preview.className = 'whatsapp-session-preview';
+
+            const qr = document.createElement('div');
+            qr.className = 'whatsapp-session-qr';
+            preview.append(qr);
+            card.append(preview);
+
+            const actions = document.createElement('div');
+            actions.className = 'whatsapp-session-actions';
+
+            const openButton = document.createElement('button');
+            openButton.type = 'button';
+            openButton.className = 'btn btn-success btn-sm';
+            openButton.textContent = 'Abrir sesión';
+            openButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                openWebForLine(line.id);
             });
+
+            actions.append(openButton);
+            card.append(actions);
+
+            const identifier = document.createElement('p');
+            identifier.className = 'whatsapp-session-id';
+            identifier.textContent = `ID interno: ${line.id}`;
+            card.append(identifier);
+
+            sessionGrid.append(card);
+        });
+    }
+
+    function openWebForLine(lineId, options = {}) {
+        const targetId = lineId ? `whatsapp-${lineId}` : '_blank';
+        if (lineId) {
+            const existing = sessionWindows.get(lineId);
+            if (existing && !existing.closed) {
+                if (options.focus !== false && typeof existing.focus === 'function') {
+                    existing.focus();
+                }
+                return existing;
+            }
+        }
+        const win = window.open('https://web.whatsapp.com/', targetId);
+        if (!win) {
+            showFeedback('No se pudo abrir la ventana de WhatsApp. Revisa el bloqueo de ventanas emergentes.', 'danger');
+            return null;
+        }
+        try {
+            win.opener = null;
+        } catch (error) {
+            // Ignoramos errores al limpiar el opener
+        }
+        if (lineId) {
+            sessionWindows.set(lineId, win);
+        }
+        if (options.focus !== false && typeof win.focus === 'function') {
+            win.focus();
+        }
+        return win;
     }
 
     function mergeLine(line) {
@@ -471,6 +616,21 @@
             lineList.addEventListener('click', handleLineClick);
         }
 
+        if (sessionGrid) {
+            sessionGrid.addEventListener('click', (event) => {
+                const card = event.target.closest('.whatsapp-session-card[data-line-id]');
+                if (!card) return;
+                if (event.target.closest('button')) return;
+                const lineId = card.dataset.lineId;
+                if (!lineId || state.selectedLine === lineId) return;
+                state.selectedLine = lineId;
+                renderLineList();
+                updateCurrentLineInfo();
+                renderMessages();
+                requestHistory(lineId);
+            });
+        }
+
         if (refreshButton) {
             refreshButton.addEventListener('click', () => {
                 refreshLinesFallback();
@@ -482,13 +642,38 @@
 
         if (openWebButton) {
             openWebButton.addEventListener('click', () => {
-                window.open('https://web.whatsapp.com/', '_blank', 'noopener');
+                if (!state.selectedLine) {
+                    showFeedback('Selecciona una línea para abrir su sesión de WhatsApp Web.', 'danger');
+                    return;
+                }
+                openWebForLine(state.selectedLine);
             });
         }
 
         if (openSplitButton) {
             openSplitButton.addEventListener('click', () => {
                 window.open('/cajero.html', '_blank', 'noopener');
+            });
+        }
+
+        if (openAllWebButton) {
+            openAllWebButton.addEventListener('click', () => {
+                const lines = getSortedLines().slice(0, 8);
+                if (!lines.length) {
+                    showFeedback('No hay líneas registradas para abrir.', 'warning');
+                    return;
+                }
+                let opened = 0;
+                for (let index = 0; index < lines.length; index += 1) {
+                    const line = lines[index];
+                    const win = openWebForLine(line.id, { focus: index === 0 });
+                    if (win) {
+                        opened += 1;
+                    }
+                }
+                if (!opened) {
+                    showFeedback('No se pudieron abrir las ventanas de WhatsApp. Permite las ventanas emergentes para continuar.', 'danger');
+                }
             });
         }
 

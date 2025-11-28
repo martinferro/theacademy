@@ -1,22 +1,57 @@
 {
   "lines": {
-    "cajero1": {
-      "id": "cajero1",
-      "nombre": "Cajero 1",
+    "linea-1": {
+      "id": "linea-1",
+      "nombre": "Línea 1",
       "estado": "disconnected",
       "ultimaConexion": null,
       "mensajes": []
     },
-    "cajero2": {
-      "id": "cajero2",
-      "nombre": "Cajero 2",
+    "linea-2": {
+      "id": "linea-2",
+      "nombre": "Línea 2",
       "estado": "disconnected",
       "ultimaConexion": null,
       "mensajes": []
     },
-    "soporte": {
-      "id": "soporte",
-      "nombre": "Soporte",
+    "linea-3": {
+      "id": "linea-3",
+      "nombre": "Línea 3",
+      "estado": "disconnected",
+      "ultimaConexion": null,
+      "mensajes": []
+    },
+    "linea-4": {
+      "id": "linea-4",
+      "nombre": "Línea 4",
+      "estado": "disconnected",
+      "ultimaConexion": null,
+      "mensajes": []
+    },
+    "linea-5": {
+      "id": "linea-5",
+      "nombre": "Línea 5",
+      "estado": "disconnected",
+      "ultimaConexion": null,
+      "mensajes": []
+    },
+    "linea-6": {
+      "id": "linea-6",
+      "nombre": "Línea 6",
+      "estado": "disconnected",
+      "ultimaConexion": null,
+      "mensajes": []
+    },
+    "linea-7": {
+      "id": "linea-7",
+      "nombre": "Línea 7",
+      "estado": "disconnected",
+      "ultimaConexion": null,
+      "mensajes": []
+    },
+    "linea-8": {
+      "id": "linea-8",
+      "nombre": "Línea 8",
       "estado": "disconnected",
       "ultimaConexion": null,
       "mensajes": []
