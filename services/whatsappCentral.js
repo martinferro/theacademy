@@ -4,16 +4,22 @@ const crypto = require('crypto');
 const EventEmitter = require('events');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'whatsapp-central.json');
-const DEFAULT_LINES = (process.env.WHATSAPP_LINES || '')
+const DEFAULT_LINE_COUNT = 8;
+
+const ENVIRONMENT_LINES = (process.env.WHATSAPP_LINES || '')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean)
-  .map((value) => ({ id: value, nombre: value }))
-  .concat([
-    { id: 'cajero1', nombre: 'Cajero 1' },
-    { id: 'cajero2', nombre: 'Cajero 2' },
-    { id: 'soporte', nombre: 'Soporte' },
-  ]);
+  .map((value) => ({ id: value, nombre: value }));
+
+const FALLBACK_LINES = Array.from({ length: DEFAULT_LINE_COUNT }, (_, index) => ({
+  id: `linea-${index + 1}`,
+  nombre: `Línea ${index + 1}`,
+}));
+
+const DEFAULT_LINES = [...ENVIRONMENT_LINES, ...FALLBACK_LINES].filter((line, index, array) =>
+  line && line.id && array.findIndex((candidate) => candidate?.id === line.id) === index
+);
 
 const VALID_STATES = new Set(['connected', 'connecting', 'disconnected']);
 

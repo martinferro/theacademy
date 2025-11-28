@@ -59,8 +59,30 @@
             </div>
         </div>
 
-        <div class="col-12 col-lg-8">
-            <div class="card shadow-sm h-100">
+        <div class="col-12 col-lg-8 d-flex flex-column gap-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+                        <div>
+                            <h2 class="h5 mb-1">Sesiones de WhatsApp Web</h2>
+                            <p class="text-muted small mb-0">
+                                Abre hasta ocho ventanas de WhatsApp Web para vincular cada línea y recibir los mensajes en tiempo real.
+                            </p>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" id="whatsappAdminOpenAllWeb" class="btn btn-outline-primary btn-sm">
+                                Abrir todas las ventanas
+                            </button>
+                        </div>
+                    </div>
+                    <div id="whatsappAdminSessionGrid" class="whatsapp-session-grid mt-3"></div>
+                    <p id="whatsappAdminSessionGridEmpty" class="text-center text-muted small py-4 mb-0">
+                        No hay líneas registradas todavía. Utiliza el formulario para crearlas y comenzar a vincularlas.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card shadow-sm flex-grow-1">
                 <div class="card-body d-flex flex-column gap-3">
                     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
                         <div>

@@ -169,10 +169,12 @@
 
   function updateStatus(line) {
     if (!statusElement) return;
-    const state = line?.estado === 'connected' ? 'online' : 'offline';
-    statusElement.textContent = state === 'online' ? 'Conectado' : 'Desconectado';
+    const state = line?.estado === 'connected' ? 'online' : line?.estado === 'connecting' ? 'connecting' : 'offline';
+    statusElement.textContent =
+      state === 'online' ? 'Conectado' : state === 'connecting' ? 'Conectando' : 'Desconectado';
     statusElement.classList.toggle('status-badge--online', state === 'online');
-    statusElement.classList.toggle('status-badge--offline', state !== 'online');
+    statusElement.classList.toggle('status-badge--offline', state === 'offline');
+    statusElement.classList.toggle('status-badge--connecting', state === 'connecting');
   }
 
   function renderEmptyConversation(text) {
