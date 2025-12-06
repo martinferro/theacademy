@@ -30,6 +30,7 @@ integrateMultiWhatsapp(whatsappCentral);
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
 const PORT = process.env.PORT || 3000;
@@ -101,6 +102,29 @@ function readPlatformLinks({ onlyActive = true } = {}) {
     console.error("⚠️ No se pudieron leer los enlaces de plataformas:", error.message);
     return defaultPlatformLinks.filter((item) => (onlyActive ? item.activo : true));
   }
+}
+
+function normalizeWebhookPhone(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const withoutPrefix = trimmed.replace(/^whatsapp:/i, "").trim();
+  const digitsOnly = withoutPrefix.replace(/[^0-9+]/g, "");
+  return digitsOnly || withoutPrefix;
+}
+
+function normalizeWebhookLineId(value) {
+  if (typeof value !== "string" && typeof value !== "number") return "";
+  const raw = String(value).trim();
+  if (!raw) return "";
+  const normalized = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || raw.replace(/\s+/g, "_");
 }
 
 // ===============================
@@ -838,6 +862,52 @@ app.post("/api/cajero/solicitar-pago", requireCajeroAuth, async (req, res) => {
   } catch (error) {
     console.error("❌ Error solicitando pago:", error.message);
     res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+app.post("/webhooks/whatsapp", async (req, res) => {
+  const rawLine =
+    req.query.linea ||
+    req.query.line ||
+    req.body.linea ||
+    req.body.line ||
+    req.body.Linea ||
+    req.body.Line;
+  const bodyRaw = typeof req.body.Body === "string" ? req.body.Body : req.body.body;
+  const messageBody = typeof bodyRaw === "string" ? bodyRaw.trim() : "";
+
+  if (!messageBody) {
+    return res.status(400).json({ ok: false, error: "missing_body" });
+  }
+
+  const from = normalizeWebhookPhone(req.body.From || req.body.from || req.body.WaId);
+  const to = normalizeWebhookPhone(req.body.To || req.body.to);
+  const linea = normalizeWebhookLineId(rawLine || to || from || "linea-webhook");
+
+  try {
+    const mensaje = whatsappCentral.registerIncoming(linea, {
+      body: messageBody,
+      from,
+      to,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        source: "whatsapp_webhook",
+        provider: req.body.SmsMessageSid || req.body.MessageSid ? "twilio" : "generic",
+        sid: req.body.SmsMessageSid || req.body.MessageSid || null,
+      },
+    });
+
+    whatsappCentral.setLineStatus(
+      linea,
+      "connected",
+      { ultimaConexion: new Date().toISOString() },
+      { silent: true }
+    );
+
+    return res.json({ ok: true, linea, mensaje });
+  } catch (error) {
+    console.error("❌ Error registrando mensaje entrante de WhatsApp:", error);
+    return res.status(500).json({ ok: false, error: "server_error" });
   }
 });
 
