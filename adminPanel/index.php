@@ -37,8 +37,9 @@ if (!in_array($page, $allowedPages, true)) {
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'whatsapp' ? 'active' : ''; ?>" href="?page=whatsapp">Central WhatsApp</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'configuracion' ? 'active' : ''; ?>" href="?page=configuracion">Configuración</a></li>
                 </ul>
-                <div class="d-flex align-items-center text-white">
-                    <span class="me-3">Hola, <?php echo htmlspecialchars($_SESSION['admin_name']); ?></span>
+                <div class="d-flex align-items-center text-white gap-2 flex-wrap justify-content-end">
+                    <a class="btn btn-sm btn-light text-primary" href="?page=configuracion">Configuración</a>
+                    <span class="me-1">Hola, <?php echo htmlspecialchars($_SESSION['admin_name']); ?></span>
                     <button id="logoutBtn" class="btn btn-sm btn-outline-light">Salir</button>
                 </div>
             </div>
