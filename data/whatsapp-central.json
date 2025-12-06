@@ -3,22 +3,48 @@
     "cajero1": {
       "id": "cajero1",
       "nombre": "Cajero 1",
-      "estado": "disconnected",
-      "ultimaConexion": null,
-      "mensajes": []
+      "estado": "connected",
+      "ultimaConexion": "2025-11-06T06:28:37.794Z",
+      "mensajes": [
+        {
+          "id": "bca1327b-a6f1-47d8-95b7-37c33e6a1b4e",
+          "direction": "outgoing",
+          "body": "hola",
+          "from": null,
+          "to": "1124098501",
+          "timestamp": "2025-12-06T06:36:19.776Z",
+          "status": null,
+          "metadata": {}
+        }
+      ],
+      "ultimaActividad": "2025-12-06T06:36:19.776Z",
+      "ultimoMensaje": "bca1327b-a6f1-47d8-95b7-37c33e6a1b4e"
     },
     "cajero2": {
       "id": "cajero2",
       "nombre": "Cajero 2",
-      "estado": "disconnected",
-      "ultimaConexion": null,
-      "mensajes": []
+      "estado": "connected",
+      "ultimaConexion": "2025-11-06T06:28:37.802Z",
+      "mensajes": [
+        {
+          "id": "d96fe1d5-ce2e-4a5a-869d-4322c904aca9",
+          "direction": "outgoing",
+          "body": "aaa",
+          "from": null,
+          "to": "aaasdasd",
+          "timestamp": "2025-12-06T06:37:39.480Z",
+          "status": null,
+          "metadata": {}
+        }
+      ],
+      "ultimaActividad": "2025-12-06T06:37:39.480Z",
+      "ultimoMensaje": "d96fe1d5-ce2e-4a5a-869d-4322c904aca9"
     },
     "soporte": {
       "id": "soporte",
       "nombre": "Soporte",
-      "estado": "disconnected",
-      "ultimaConexion": null,
+      "estado": "connected",
+      "ultimaConexion": "2025-11-06T06:28:37.810Z",
       "mensajes": []
     }
   }
