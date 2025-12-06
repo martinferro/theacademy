@@ -6,7 +6,7 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 $page = $_GET['page'] ?? 'dashboard';
-$allowedPages = ['dashboard', 'cajeros', 'alias', 'platforms', 'clientes', 'whatsapp'];
+$allowedPages = ['dashboard', 'cajeros', 'alias', 'platforms', 'clientes', 'whatsapp', 'configuracion'];
 if (!in_array($page, $allowedPages, true)) {
     $page = 'dashboard';
 }
@@ -35,6 +35,7 @@ if (!in_array($page, $allowedPages, true)) {
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'platforms' ? 'active' : ''; ?>" href="?page=platforms">Links a plataformas</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'clientes' ? 'active' : ''; ?>" href="?page=clientes">Clientes</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'whatsapp' ? 'active' : ''; ?>" href="?page=whatsapp">Central WhatsApp</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo $page === 'configuracion' ? 'active' : ''; ?>" href="?page=configuracion">Configuración</a></li>
                 </ul>
                 <div class="d-flex align-items-center text-white">
                     <span class="me-3">Hola, <?php echo htmlspecialchars($_SESSION['admin_name']); ?></span>
@@ -62,6 +63,9 @@ if (!in_array($page, $allowedPages, true)) {
                 case 'whatsapp':
                     include __DIR__ . '/views/whatsapp.php';
                     break;
+                case 'configuracion':
+                    include __DIR__ . '/views/configuracion.php';
+                    break;
                 default:
                     include __DIR__ . '/dashboard.php';
                     break;
@@ -84,6 +88,8 @@ if (!in_array($page, $allowedPages, true)) {
     <script src="assets/js/clientes.js"></script>
     <?php elseif ($page === 'whatsapp'): ?>
     <script src="assets/js/whatsapp.js"></script>
+    <?php elseif ($page === 'configuracion'): ?>
+    <script src="assets/js/configuracion.js"></script>
     <?php endif; ?>
 </body>
 </html>
