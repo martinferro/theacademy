@@ -99,6 +99,22 @@
   max-height: 70vh;
 }
 
+.whatsapp-lines-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0 0.25rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 0.35rem;
+}
+
+.whatsapp-lines-helper {
+  margin: 0;
+  color: var(--whatsapp-muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
 .whatsapp-lines::-webkit-scrollbar,
 .whatsapp-chat-messages::-webkit-scrollbar {
   width: 7px;
