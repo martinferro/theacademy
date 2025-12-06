@@ -1,6 +1,13 @@
 const TOKEN_KEY = 'theacademy.cajero.token';
 
-const socket = io();
+const socketAvailable = typeof io === 'function';
+const socket = socketAvailable
+  ? io()
+  : {
+      on: (...args) => console.warn('Socket.io no disponible, evento ignorado:', args[0]),
+      emit: (...args) => console.warn('Socket.io no disponible, emisión ignorada:', args[0]),
+      connected: false,
+    };
 
 const loginOverlay = document.getElementById('cajeroLogin');
 const loginForm = document.getElementById('cajeroLoginForm');
@@ -38,6 +45,13 @@ function updateLayoutAuthenticatedState(isAuthenticated) {
   }
   if (whatsappPanel) {
     whatsappPanel.dataset.authenticated = state;
+  }
+
+  if (!socketAvailable && loginError) {
+    loginError.textContent =
+      'No pudimos conectar con el servidor de sockets. Revisa que el backend esté activo y recarga.';
+    loginError.hidden = false;
+    loginOverlay?.classList.remove('hidden');
   }
 }
 
