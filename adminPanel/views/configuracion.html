@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Configuración - Salud del Sistema</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.10/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        :root { color-scheme: light; }
+        body { background: #f5f7fb; }
+        .card {
+            background: #fff;
+            border: 1px solid rgb(241 245 249);
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800">
+    <header class="bg-white shadow-sm border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm text-slate-500 uppercase tracking-[0.18em]">AdminPanel</p>
+                <h1 class="text-2xl font-semibold text-slate-800">Salud del sistema</h1>
+                <p class="text-slate-500">Validación rápida de la configuración y servicios esenciales.</p>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-slate-500">
+                <span class="h-2 w-2 rounded-full bg-emerald-500 inline-block"></span>
+                <span>Panel actualizado en tiempo real</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <!-- Estado general del sistema -->
+        <section class="grid gap-6 lg:grid-cols-3">
+            <div class="card lg:col-span-2">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <p class="text-sm text-slate-500">Estado general</p>
+                        <h2 class="text-xl font-semibold">Sistema en línea</h2>
+                    </div>
+                    <span class="badge bg-emerald-100 text-emerald-700">Sincronizado</span>
+                </div>
+                <div class="grid sm:grid-cols-2 gap-4 text-sm">
+                    <div class="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                        <p class="text-slate-500">Entorno actual</p>
+                        <p class="text-lg font-medium text-slate-800">Local Development</p>
+                    </div>
+                    <div class="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                        <p class="text-slate-500">URL base del adminPanel</p>
+                        <p class="text-lg font-medium text-slate-800">http://localhost/adminPanel</p>
+                    </div>
+                    <div class="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                        <p class="text-slate-500">Rama actual</p>
+                        <p class="text-lg font-medium text-slate-800">main</p>
+                    </div>
+                    <div class="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                        <p class="text-slate-500">Hora del servidor</p>
+                        <p id="serverTime" class="text-lg font-medium text-slate-800">--:--</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-500">Logs rápidos</p>
+                        <h2 class="text-lg font-semibold">Últimos eventos</h2>
+                    </div>
+                    <span class="badge bg-slate-100 text-slate-700">En revisión</span>
+                </div>
+                <div class="bg-slate-50 border border-slate-100 rounded-lg p-4 text-sm">
+                    <p class="text-slate-500 font-medium">Último error registrado:</p>
+                    <p class="text-slate-800">No hay errores recientes.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Servicios principales -->
+        <section class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div class="card">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Base de datos</h3>
+                    <span class="badge bg-amber-100 text-amber-700">Pendiente de validación</span>
+                </div>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between border-b border-slate-100 pb-2">
+                        <span class="text-slate-500">Host</span>
+                        <span class="font-medium">localhost</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-100 pb-2">
+                        <span class="text-slate-500">Base de datos</span>
+                        <span class="font-medium">theacademy</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-100 pb-2">
+                        <span class="text-slate-500">Usuario</span>
+                        <span class="font-medium">admin</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-100 pb-2">
+                        <span class="text-slate-500">Puerto</span>
+                        <span class="font-medium">5432</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Estado de conexión</span>
+                        <span class="font-semibold text-amber-600">Pendiente de validación</span>
+                    </div>
+                </div>
+                <button onclick="probarConexionDB()" class="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors text-sm font-medium">
+                    Probar conexión
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Servidor principal (Node)</h3>
+                    <span class="badge bg-amber-100 text-amber-700">Pendiente</span>
+                </div>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between border-b border-slate-100 pb-2">
+                        <span class="text-slate-500">URL configurada</span>
+                        <span class="font-medium">http://localhost:3000</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Estado</span>
+                        <span class="font-semibold text-amber-600">Pendiente de validación</span>
+                    </div>
+                </div>
+                <button onclick="probarServidorPrincipal()" class="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors text-sm font-medium">
+                    Probar servidor principal
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Backend WhatsApp (Baileys)</h3>
+                    <span class="badge bg-amber-100 text-amber-700">Pendiente</span>
+                </div>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between border-b border-slate-100 pb-2">
+                        <span class="text-slate-500">URL configurada</span>
+                        <span class="font-medium">http://localhost:4000</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-100 pb-2">
+                        <span class="text-slate-500">Estado</span>
+                        <span class="font-semibold text-amber-600">Pendiente de validación</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-100 pb-2">
+                        <span class="text-slate-500">Líneas detectadas</span>
+                        <span class="font-medium">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Líneas conectadas</span>
+                        <span class="font-medium">0</span>
+                    </div>
+                </div>
+                <button onclick="probarBackendBaileys()" class="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors text-sm font-medium">
+                    Probar backend Baileys
+                </button>
+            </div>
+        </section>
+
+        <!-- Variables .env y tablas esenciales -->
+        <section class="grid gap-6 lg:grid-cols-2">
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-lg font-semibold">Variables .env</h3>
+                    <span class="badge bg-emerald-100 text-emerald-700">Detectando</span>
+                </div>
+                <ul class="space-y-2 text-sm">
+                    <li class="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                        <span class="text-slate-600">DB_HOST</span>
+                        <span class="badge bg-emerald-100 text-emerald-700">Detectado</span>
+                    </li>
+                    <li class="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                        <span class="text-slate-600">DB_NAME</span>
+                        <span class="badge bg-emerald-100 text-emerald-700">Detectado</span>
+                    </li>
+                    <li class="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                        <span class="text-slate-600">MAIN_SERVER_URL</span>
+                        <span class="badge bg-emerald-100 text-emerald-700">Detectado</span>
+                    </li>
+                    <li class="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                        <span class="text-slate-600">WHATSAPP_PORT</span>
+                        <span class="badge bg-emerald-100 text-emerald-700">Detectado</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-lg font-semibold">Tablas esenciales</h3>
+                    <span class="badge bg-amber-100 text-amber-700">Pendiente</span>
+                </div>
+                <div class="overflow-hidden rounded-lg border border-slate-100">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-slate-600 uppercase text-xs tracking-wide">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Tabla</th>
+                                <th class="px-4 py-3 text-left">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr>
+                                <td class="px-4 py-3 font-medium text-slate-800">whatsapp_lines</td>
+                                <td class="px-4 py-3 text-amber-600 font-semibold">Pendiente</td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-3 font-medium text-slate-800">whatsapp_messages</td>
+                                <td class="px-4 py-3 text-amber-600 font-semibold">Pendiente</td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-3 font-medium text-slate-800">usuarios</td>
+                                <td class="px-4 py-3 text-amber-600 font-semibold">Pendiente</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function actualizarHora() {
+            const timeEl = document.getElementById('serverTime');
+            if (timeEl) {
+                timeEl.textContent = new Date().toLocaleString();
+            }
+        }
+
+        function probarConexionDB() {
+            alert('Conexión OK (simulación)');
+        }
+
+        function probarServidorPrincipal() {
+            alert('Servidor principal operativo (simulación)');
+        }
+
+        function probarBackendBaileys() {
+            alert('Backend Baileys activo (simulación)');
+        }
+
+        actualizarHora();
+        setInterval(actualizarHora, 1000 * 30);
+    </script>
+</body>
+</html>
