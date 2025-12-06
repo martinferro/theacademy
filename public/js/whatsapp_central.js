@@ -93,8 +93,16 @@
     return;
   }
 
-  if (typeof socket === 'undefined') {
+  const socketUnavailable =
+    typeof socket === 'undefined' || typeof socket.on !== 'function' || !socket.io;
+
+  if (socketUnavailable) {
     console.warn('Socket.io no disponible para la central de WhatsApp');
+    renderEmptyConversation(
+      'No pudimos conectar con el servidor en tiempo real. Verifica que el backend esté activo y recarga la página.'
+    );
+    renderFeedback('Sin conexión con el servidor de WhatsApp. Revisa el backend.');
+    setFormDisabled(true);
     return;
   }
 
