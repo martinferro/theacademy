@@ -21,6 +21,7 @@
     </div>
 
     <div class="row g-4">
+        <!-- COLUMNA IZQUIERDA: LÍNEAS -->
         <div class="col-12 col-lg-4">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
@@ -59,6 +60,7 @@
             </div>
         </div>
 
+        <!-- COLUMNA DERECHA: DETALLE + HISTORIAL -->
         <div class="col-12 col-lg-8">
             <div class="card shadow-sm h-100">
                 <div class="card-body d-flex flex-column gap-3">
@@ -84,7 +86,9 @@
                                 <header class="whatsapp-chat-header">
                                     <div class="whatsapp-chat-header-text">
                                         <h3 id="whatsappAdminChatTitle">Historial de mensajes</h3>
-                                        <p id="whatsappAdminChatMeta">Selecciona una línea para cargar el historial.</p>
+                                        <p id="whatsappAdminChatMeta">
+                                            Selecciona una línea para cargar el historial.
+                                        </p>
                                     </div>
                                 </header>
                                 <div id="whatsappAdminMessages" class="whatsapp-chat-messages">
@@ -94,6 +98,7 @@
                         </div>
                     </div>
 
+                    <!-- ENVÍO DE MENSAJES -->
                     <form id="whatsappAdminSendForm" class="row g-2">
                         <div class="col-12 col-md-4">
                             <label for="whatsappAdminSendTo" class="form-label small">Número destino (opcional)</label>
@@ -108,6 +113,7 @@
                         </div>
                     </form>
 
+                    <!-- SIMULACIÓN (DEBUG) -->
                     <form id="whatsappAdminIncomingForm" class="row g-2">
                         <div class="col-12 col-md-4">
                             <label for="whatsappAdminIncomingFrom" class="form-label small">Remitente simulado</label>
@@ -123,10 +129,18 @@
                     </form>
 
                     <div class="d-flex flex-wrap gap-2">
-                        <button type="button" id="whatsappAdminConnect" class="btn btn-success btn-sm" disabled>Marcar como conectado</button>
-                        <button type="button" id="whatsappAdminDisconnect" class="btn btn-outline-danger btn-sm" disabled>Marcar como desconectado</button>
-                        <button type="button" id="whatsappAdminOpenWeb" class="btn btn-outline-secondary btn-sm">Abrir WhatsApp Web</button>
-                        <button type="button" id="whatsappAdminOpenSplit" class="btn btn-outline-primary btn-sm">Abrir ventana partida</button>
+                        <button type="button" id="whatsappAdminConnect" class="btn btn-success btn-sm" disabled>
+                            Iniciar / reiniciar sesión
+                        </button>
+                        <button type="button" id="whatsappAdminDisconnect" class="btn btn-outline-danger btn-sm" disabled>
+                            Cerrar sesión
+                        </button>
+                        <button type="button" id="whatsappAdminOpenWeb" class="btn btn-outline-secondary btn-sm">
+                            Abrir WhatsApp Web
+                        </button>
+                        <button type="button" id="whatsappAdminOpenSplit" class="btn btn-outline-primary btn-sm">
+                            Abrir ventana partida
+                        </button>
                     </div>
                 </div>
             </div>
@@ -134,5 +148,11 @@
     </div>
 </section>
 
-<link rel="stylesheet" href="/css/whatsapp_central.css">
-<script src="/socket.io/socket.io.js"></script>
+<!-- CSS específico de la vista WhatsApp -->
+<link rel="stylesheet" href="/adminPanel/assets/css/whatsapp_central.css">
+
+<!-- Cliente de Socket.IO servido por el backend Node (puerto 4000) -->
+<script src="http://localhost:4000/socket.io/socket.io.js"></script>
+
+<!-- Lógica de la vista admin de WhatsApp -->
+<script src="/adminPanel/assets/js/whatsapp_admin.js"></script>

@@ -905,6 +905,32 @@ io.on("connection", (socket) => {
     });
   });
 
+//--------------------------------------------------------------
+// 📩 MENSAJES ENTRANTES DESDE WHATSAPP (ENVIADOS POR Baileys)
+//--------------------------------------------------------------
+socket.on("wa:message", ({ 
+    lineId,
+    lineName,
+    chatId,
+    from,
+    body,
+    timestamp
+}) => {
+
+    const telefono = chatId.replace(/[@:].*/, "");
+
+    console.log("📨 [CAJERO] Nuevo mensaje WhatsApp recibido:", telefono, body);
+
+    io.emit("cajero:message", {
+        telefono,
+        mensaje: body,
+        fecha: timestamp,
+        autor: "cliente",
+        linea: lineName || lineId
+    });
+});
+
+
   socket.on("cajero:auth", async ({ token }) => {
     const session = sessionStore.getSession(token);
     if (!session || session.type !== "cajero") {

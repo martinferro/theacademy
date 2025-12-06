@@ -57,6 +57,7 @@ function ensureChat(telefono) {
     chats.set(telefono, {
       telefono,
       displayName: null,
+      line: null,
       messages: [],
       lastMessage: '',
       lastTimestamp: 0,
@@ -144,7 +145,13 @@ function renderChatList(filter = '') {
 
     const name = document.createElement('span');
     name.className = 'chat-name';
-    name.textContent = chat.displayName || chat.telefono;
+
+    // 👇 Si viene de WhatsApp mostramos "Línea - Teléfono"
+    if (chat.line) {
+      name.textContent = `${chat.line} - ${chat.telefono}`;
+    } else {
+      name.textContent = chat.displayName || chat.telefono;
+    }
 
     const time = document.createElement('span');
     time.className = 'chat-time';
@@ -204,7 +211,8 @@ function updateHeader() {
   }
 
   const chat = ensureChat(chatActivo);
-  chatTitle.textContent = chat.displayName || `Chat con ${chat.telefono}`;
+  chatTitle.textContent =
+    chat.displayName || (chat.line ? `${chat.line} - ${chat.telefono}` : `Chat con ${chat.telefono}`);
   chatSubtitle.textContent = chat.displayName
     ? `Teléfono ${chat.telefono}`
     : 'Conversación activa en tiempo real';
@@ -573,6 +581,24 @@ socket.on('cajero:nuevoMensaje', ({ telefono, nick, mensaje, fecha, autor }) => 
   if (!chatActivo) {
     renderChatList(chatSearch.value);
   }
+});
+
+//--------------------------------------------------------------
+// 📩 MENSAJES QUE LLEGAN DESDE WHATSAPP (BAILEYS → server.cjs)
+// server.cjs emite: { telefono, mensaje, fecha, autor, linea }
+//--------------------------------------------------------------
+socket.on('cajero:message', ({ telefono, mensaje, fecha, autor, linea }) => {
+  if (!telefono) return;
+  const chat = ensureChat(telefono);
+
+  if (linea) {
+    chat.line = linea;
+  }
+
+  const ts = fecha ? new Date(fecha).getTime() : Date.now();
+  const sender = autor === 'cajero' ? 'cajero' : 'cliente';
+
+  pushMessage(telefono, sender, mensaje || '', ts);
 });
 
 socket.on('cajero:cliente-actualizado', ({ telefono, nick }) => {
