@@ -6,7 +6,7 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 $page = $_GET['page'] ?? 'dashboard';
-$allowedPages = ['dashboard', 'cajeros', 'alias', 'platforms', 'clientes', 'whatsapp'];
+$allowedPages = ['dashboard', 'cajeros', 'alias', 'platforms', 'clientes', 'whatsapp', 'configuracion'];
 if (!in_array($page, $allowedPages, true)) {
     $page = 'dashboard';
 }
@@ -35,11 +35,13 @@ if (!in_array($page, $allowedPages, true)) {
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'platforms' ? 'active' : ''; ?>" href="?page=platforms">Links a plataformas</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'clientes' ? 'active' : ''; ?>" href="?page=clientes">Clientes</a></li>
                     <li class="nav-item"><a class="nav-link <?php echo $page === 'whatsapp' ? 'active' : ''; ?>" href="?page=whatsapp">Central WhatsApp</a></li>
+                    <li class="nav-item"><a class="nav-link <?php echo $page === 'configuracion' ? 'active' : ''; ?>" href="?page=configuracion">Configuración</a></li>
                 </ul>
-                <div class="d-flex align-items-center text-white">
-                    <span class="me-3">Hola, <?php echo htmlspecialchars($_SESSION['admin_name']); ?></span>
-                    <button id="logoutBtn" class="btn btn-sm btn-outline-light">Salir</button>
-                </div>
+            </div>
+            <div class="d-flex align-items-center text-white gap-2 flex-wrap justify-content-end ms-lg-3">
+                <a class="btn btn-sm btn-light text-primary" href="?page=configuracion">Configuración</a>
+                <span class="me-1">Hola, <?php echo htmlspecialchars($_SESSION['admin_name']); ?></span>
+                <button id="logoutBtn" class="btn btn-sm btn-outline-light">Salir</button>
             </div>
         </div>
     </nav>
@@ -61,6 +63,9 @@ if (!in_array($page, $allowedPages, true)) {
                     break;
                 case 'whatsapp':
                     include __DIR__ . '/views/whatsapp.php';
+                    break;
+                case 'configuracion':
+                    include __DIR__ . '/views/configuracion.php';
                     break;
                 default:
                     include __DIR__ . '/dashboard.php';
@@ -84,6 +89,8 @@ if (!in_array($page, $allowedPages, true)) {
     <script src="assets/js/clientes.js"></script>
     <?php elseif ($page === 'whatsapp'): ?>
     <script src="assets/js/whatsapp.js"></script>
+    <?php elseif ($page === 'configuracion'): ?>
+    <script src="assets/js/configuracion.js"></script>
     <?php endif; ?>
 </body>
 </html>

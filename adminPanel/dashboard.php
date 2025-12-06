@@ -48,6 +48,17 @@
             </div>
         </div>
     </div>
+
+    <div class="col-md-3">
+        <div class="card shadow-sm border-primary h-100">
+            <div class="card-body d-flex flex-column">
+                <p class="text-muted mb-2">Acceso rápido</p>
+                <h5 class="card-title">Configuración</h5>
+                <p class="text-muted small flex-grow-1">Ir directo a las herramientas de limpieza y mantenimiento.</p>
+                <a class="btn btn-primary mt-2" href="?page=configuracion">Abrir Configuración</a>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row mt-4">
