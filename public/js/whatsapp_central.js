@@ -488,6 +488,31 @@
     handleIncomingMessage(linea, mensaje);
   });
 
+  socket.on('whatsapp:lineaActualizada', ({ linea, lineaActualizada }) => {
+    const updated = lineaActualizada || {};
+    const lineId = updated.id || linea;
+    if (!lineId) return;
+
+    const previous = lineMap.get(lineId) || { id: lineId, unread: 0 };
+    const merged = {
+      ...previous,
+      ...updated,
+      id: lineId,
+      unread: previous.unread ?? 0,
+    };
+
+    lineMap.set(lineId, merged);
+    if (lineId === selectedLine) {
+      titleElement.textContent = merged.nombre || merged.id;
+      metaElement.textContent = merged.ultimoMensaje?.timestamp
+        ? `Último mensaje ${formatTime(merged.ultimoMensaje.timestamp)}`
+        : 'Sin mensajes registrados.';
+      updateStatus(merged);
+    }
+
+    renderLines();
+  });
+
   socket.on('whatsapp:historial', ({ linea, mensajes }) => {
     if (!linea || linea !== selectedLine) return;
     currentMessages = Array.isArray(mensajes) ? mensajes.map(normalizeMessage) : [];
