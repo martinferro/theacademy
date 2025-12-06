@@ -93,8 +93,16 @@
     return;
   }
 
-  if (typeof socket === 'undefined') {
+  const socketUnavailable =
+    typeof socket === 'undefined' || typeof socket.on !== 'function' || !socket.io;
+
+  if (socketUnavailable) {
     console.warn('Socket.io no disponible para la central de WhatsApp');
+    renderEmptyConversation(
+      'No pudimos conectar con el servidor en tiempo real. Verifica que el backend esté activo y recarga la página.'
+    );
+    renderFeedback('Sin conexión con el servidor de WhatsApp. Revisa el backend.');
+    setFormDisabled(true);
     return;
   }
 
@@ -486,6 +494,31 @@
   socket.on('whatsapp:nuevoMensaje', ({ linea, mensaje }) => {
     if (!linea || !mensaje) return;
     handleIncomingMessage(linea, mensaje);
+  });
+
+  socket.on('whatsapp:lineaActualizada', ({ linea, lineaActualizada }) => {
+    const updated = lineaActualizada || {};
+    const lineId = updated.id || linea;
+    if (!lineId) return;
+
+    const previous = lineMap.get(lineId) || { id: lineId, unread: 0 };
+    const merged = {
+      ...previous,
+      ...updated,
+      id: lineId,
+      unread: previous.unread ?? 0,
+    };
+
+    lineMap.set(lineId, merged);
+    if (lineId === selectedLine) {
+      titleElement.textContent = merged.nombre || merged.id;
+      metaElement.textContent = merged.ultimoMensaje?.timestamp
+        ? `Último mensaje ${formatTime(merged.ultimoMensaje.timestamp)}`
+        : 'Sin mensajes registrados.';
+      updateStatus(merged);
+    }
+
+    renderLines();
   });
 
   socket.on('whatsapp:historial', ({ linea, mensajes }) => {
