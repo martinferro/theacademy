@@ -905,10 +905,10 @@ io.on("connection", (socket) => {
     });
   });
 
-//--------------------------------------------------------------
-// 📩 MENSAJES ENTRANTES DESDE WHATSAPP (ENVIADOS POR Baileys)
-//--------------------------------------------------------------
-socket.on("wa:message", ({ 
+  //--------------------------------------------------------------
+  // 📩 MENSAJES ENTRANTES DESDE WHATSAPP (ENVIADOS POR Baileys)
+  //--------------------------------------------------------------
+  socket.on("wa:message", ({
     lineId,
     lineName,
     chatId,
@@ -919,16 +919,44 @@ socket.on("wa:message", ({
 
     const telefono = chatId.replace(/[@:].*/, "");
 
+    const resolvedLineId = (lineId || lineName || "").toString().trim() || "whatsapp";
+    const displayName = typeof lineName === "string" && lineName.trim() ? lineName.trim() : null;
+    const messageTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
+
+    try {
+      // Aseguramos que la línea exista con el nombre configurado en el panel
+      whatsappCentral.upsertLine(resolvedLineId, displayName ? { nombre: displayName } : {}, { silent: !displayName });
+
+      // La marcamos como conectada y actualizamos la última conexión
+      whatsappCentral.setLineStatus(
+        resolvedLineId,
+        "connected",
+        { ultimaConexion: messageTimestamp },
+        { silent: false }
+      );
+
+      // Registramos el mensaje entrante para que aparezca en la vista del cajero
+      whatsappCentral.registerIncoming(resolvedLineId, {
+        body: body || "",
+        from: from || null,
+        to: null,
+        timestamp: messageTimestamp,
+        metadata: { chatId }
+      });
+    } catch (error) {
+      console.error("❌ No se pudo sincronizar el mensaje entrante con el centralizador:", error.message);
+    }
+
     console.log("📨 [CAJERO] Nuevo mensaje WhatsApp recibido:", telefono, body);
 
     io.emit("cajero:message", {
-        telefono,
-        mensaje: body,
-        fecha: timestamp,
-        autor: "cliente",
-        linea: lineName || lineId
+      telefono,
+      mensaje: body,
+      fecha: timestamp,
+      autor: "cliente",
+      linea: lineName || lineId
     });
-});
+  });
 
 
   socket.on("cajero:auth", async ({ token }) => {
