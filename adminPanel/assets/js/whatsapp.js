@@ -542,6 +542,22 @@
         setSendControlsAvailability();
     }
 
+    function loadSocketLibrary() {
+        return new Promise((resolve) => {
+            if (typeof io === 'function') {
+                resolve(true);
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = '/socket.io/socket.io.js';
+            script.async = true;
+            script.onload = () => resolve(typeof io === 'function');
+            script.onerror = () => resolve(false);
+            document.head.appendChild(script);
+        });
+    }
+
     function initSocket() {
         if (typeof io !== 'function') {
             console.warn('Socket.io no está disponible para la vista de WhatsApp.');
@@ -812,8 +828,13 @@
         }
     }
 
-    function init() {
+    async function init() {
         setControlsEnabled(false);
+        const hasSocketLib = await loadSocketLibrary();
+        if (!hasSocketLib) {
+            showFeedback('No pudimos conectar en tiempo real. Verifica que el servidor de sockets esté activo.', 'warning');
+            handleRealtimeConnection(false);
+        }
         initSocket();
         refreshLinesFallback();
         setupEvents();
