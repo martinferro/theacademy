@@ -542,6 +542,46 @@
         setSendControlsAvailability();
     }
 
+    function getSocketBaseUrl() {
+        const override =
+            window.WHATSAPP_SOCKET_URL || (document.body && document.body.dataset.whatsappSocketUrl) || null;
+        if (!override) return '';
+        return override.replace(/\/$/, '');
+    }
+
+    async function canReachSocketServer(baseUrl) {
+        const targetBase = baseUrl || window.location.origin;
+        const probeUrl = `${targetBase}/socket.io/?EIO=4&transport=polling&t=${Date.now()}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2500);
+        try {
+            const response = await fetch(probeUrl, {
+                method: 'GET',
+                mode: 'cors',
+                signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            return response.ok;
+        } catch (error) {
+            clearTimeout(timeout);
+            return false;
+        }
+    }
+
+    async function loadSocketLibrary() {
+        if (typeof io === 'function') {
+            return true;
+        }
+
+        const baseUrl = getSocketBaseUrl();
+        const reachable = await canReachSocketServer(baseUrl);
+        if (!reachable) {
+            return false;
+        }
+
+        return new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = baseUrl ? `${baseUrl}/socket.io/socket.io.js` : '/socket.io/socket.io.js';
     function loadSocketLibrary() {
         return new Promise((resolve) => {
             if (typeof io === 'function') {
@@ -565,7 +605,8 @@
             return;
         }
 
-        const socket = io();
+        const socketBase = getSocketBaseUrl();
+        const socket = socketBase ? io(socketBase) : io();
         state.socket = socket;
 
         socket.on('connect', () => {
@@ -834,6 +875,9 @@
         if (!hasSocketLib) {
             showFeedback('No pudimos conectar en tiempo real. Verifica que el servidor de sockets esté activo.', 'warning');
             handleRealtimeConnection(false);
+            refreshLinesFallback();
+            setupEvents();
+            return;
         }
         initSocket();
         refreshLinesFallback();
