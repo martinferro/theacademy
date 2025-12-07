@@ -157,4 +157,3 @@
 </section>
 
 <link rel="stylesheet" href="/css/whatsapp_central.css">
-<script src="/socket.io/socket.io.js"></script>
