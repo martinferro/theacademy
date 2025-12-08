@@ -156,4 +156,4 @@
     </div>
 </section>
 
-<link rel="stylesheet" href="/css/whatsapp_central.css">
+<link rel="stylesheet" href="/adminPanel/assets/css/whatsapp_central.css">

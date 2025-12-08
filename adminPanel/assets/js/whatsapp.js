@@ -542,15 +542,17 @@
         setSendControlsAvailability();
     }
 
-    function loadSocketLibrary() {
-        return new Promise((resolve) => {
-            if (typeof io === 'function') {
-                resolve(true);
-                return;
-            }
+    async function loadSocketLibrary() {
+        if (typeof io === 'function') {
+            return true;
+        }
 
+        const baseUrl = window.SOCKET_IO_BASE_URL || '';
+        const scriptUrl = baseUrl ? `${baseUrl}/socket.io/socket.io.js` : '/socket.io/socket.io.js';
+
+        return new Promise((resolve) => {
             const script = document.createElement('script');
-            script.src = '/socket.io/socket.io.js';
+            script.src = scriptUrl;
             script.async = true;
             script.onload = () => resolve(typeof io === 'function');
             script.onerror = () => resolve(false);

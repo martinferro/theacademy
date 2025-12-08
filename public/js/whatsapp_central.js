@@ -19,6 +19,24 @@
     }
   }
 
+  function sanitizeJsonBody(text) {
+    const trimmed = typeof text === 'string' ? text.trim() : '';
+    if (!trimmed) {
+      const error = new Error('empty_response');
+      error.rawBody = text || '';
+      throw error;
+    }
+
+    try {
+      return JSON.parse(trimmed);
+    } catch (parseError) {
+      const error = new Error('invalid_json');
+      error.rawBody = trimmed;
+      error.cause = parseError;
+      throw error;
+    }
+  }
+
   async function fetchWhatsappResource(kind, lineId) {
     const token = getStoredToken();
     const endpoints = [];
@@ -47,37 +65,48 @@
     for (const endpoint of endpoints) {
       try {
         const response = await fetch(endpoint.url, { headers: endpoint.headers });
+        const bodyText = await response.text();
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
             lastError = Object.assign(new Error('unauthorized'), { status: response.status });
             continue;
           }
+
           let payload = null;
           try {
-            payload = await response.json();
+            payload = sanitizeJsonBody(bodyText);
           } catch (parseError) {
-            // ignored
+            // ignored: keep payload as null and attach raw body for debugging
           }
+
           const error = new Error(`http_${response.status}`);
           error.status = response.status;
           error.payload = payload;
+          error.rawBody = bodyText;
           lastError = error;
           continue;
         }
 
-        const data = await response.json();
-        if (data && data.ok === false) {
-          const error = new Error(data.error || 'server_error');
-          error.payload = data;
-          if (data.error === 'line_not_found' || data.error === 'store_not_found') {
+        try {
+          const data = sanitizeJsonBody(bodyText);
+          if (data && data.ok === false) {
+            const error = new Error(data.error || 'server_error');
+            error.payload = data;
+            if (data.error === 'line_not_found' || data.error === 'store_not_found') {
+              lastError = error;
+              continue;
+            }
             lastError = error;
             continue;
           }
-          lastError = error;
-          continue;
-        }
 
-        return data;
+          return data;
+        } catch (error) {
+          // Preserve the latest parsing error and continue with the next endpoint
+          error.status = response.status;
+          lastError = error;
+        }
       } catch (error) {
         lastError = error;
       }
@@ -325,6 +354,12 @@
       currentMessages = mensajes.map(normalizeMessage);
       renderMessages();
     } catch (error) {
+      if (error && (error.message === 'empty_response' || error.message === 'invalid_json')) {
+        console.warn('Respuesta inesperada del historial de WhatsApp', error.rawBody);
+        renderEmptyConversation('El servidor devolvió una respuesta vacía o inválida. Revisa la ruta /api/whatsapp/messages o /adminPanel/backend/whatsapp_messages.php.');
+        renderFeedback('No pudimos leer el historial (respuesta inválida).');
+        return;
+      }
       if (error && (error.status === 401 || error.status === 403)) {
         renderFeedback('Tu sesión de cajero expiró. Inicia sesión nuevamente.');
         setFormDisabled(true);
