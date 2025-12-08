@@ -42,15 +42,15 @@
                     <p class="text-muted small">
                         Define un identificador interno y el nombre visible que se mostrará en los paneles.
                     </p>
-                    <form id="whatsappAdminCreateForm" class="needs-validation" novalidate>
+                    <form id="whatsappAdminCreateForm" class="needs-validation" novalidate action="#" method="post">
                         <div class="mb-2">
                             <label for="whatsappAdminLineId" class="form-label">Identificador interno</label>
-                            <input type="text" id="whatsappAdminLineId" class="form-control" placeholder="Ej. caja-centro" required />
+                            <input type="text" id="whatsappAdminLineId" name="lineId" class="form-control" placeholder="Ej. caja-centro" required />
                             <div class="invalid-feedback">Ingresa un identificador válido (letras y números).</div>
                         </div>
                         <div class="mb-3">
                             <label for="whatsappAdminLineName" class="form-label">Nombre visible</label>
-                            <input type="text" id="whatsappAdminLineName" class="form-control" placeholder="Ej. Caja Centro" required />
+                            <input type="text" id="whatsappAdminLineName" name="lineName" class="form-control" placeholder="Ej. Caja Centro" required />
                             <div class="invalid-feedback">Ingresa el nombre que verán los cajeros.</div>
                         </div>
                         <button type="submit" class="btn btn-primary btn-sm w-100">Guardar línea</button>
