@@ -88,7 +88,7 @@ if (!in_array($page, $allowedPages, true)) {
     <?php elseif ($page === 'clientes'): ?>
     <script src="assets/js/clientes.js"></script>
     <?php elseif ($page === 'whatsapp'): ?>
-    <script src="assets/js/whatsapp.js"></script>
+    <script src="assets/js/whatsapp.js?v=2"></script>
     <?php elseif ($page === 'configuracion'): ?>
     <script src="assets/js/configuracion.js"></script>
     <?php endif; ?>
