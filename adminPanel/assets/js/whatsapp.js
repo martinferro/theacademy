@@ -1,4 +1,6 @@
 (function () {
+    const socketBaseUrl = window.SOCKET_IO_BASE_URL || '';
+
     const lineList = document.getElementById('whatsappAdminLineList');
     const lineListEmpty = document.getElementById('whatsappAdminLineListEmpty');
     const refreshButton = document.getElementById('whatsappAdminRefresh');
@@ -547,8 +549,9 @@
             return true;
         }
 
-        const baseUrl = window.SOCKET_IO_BASE_URL || '';
-        const scriptUrl = baseUrl ? `${baseUrl}/socket.io/socket.io.js` : '/socket.io/socket.io.js';
+        const scriptUrl = socketBaseUrl
+            ? `${socketBaseUrl}/socket.io/socket.io.js`
+            : '/socket.io/socket.io.js';
 
         return new Promise((resolve) => {
             const script = document.createElement('script');
@@ -567,7 +570,7 @@
             return;
         }
 
-        const socket = io();
+        const socket = socketBaseUrl ? io(socketBaseUrl) : io();
         state.socket = socket;
 
         socket.on('connect', () => {
