@@ -85,6 +85,7 @@ cajeroSocket.on('connect_error', (err) => {
  */
 const lineClients = {};
 const lineNameCache = {};
+const pendingQrs = new Map();
 
 async function updateLineStatus(lineId, status) {
   await db.query(
@@ -128,6 +129,7 @@ async function createBaileysClient(lineId) {
     if (qr) {
       console.log(`📱 QR para línea ${lineId}`);
       const qrDataUrl = await qrcode.toDataURL(qr);
+      pendingQrs.set(lineId, qrDataUrl);
       io.emit('admin:line:qr', { lineId, qrDataUrl });
     }
 
@@ -136,6 +138,7 @@ async function createBaileysClient(lineId) {
       lineClients[lineId].userJid = sock.user?.id || null;
       await updateLineStatus(lineId, 'connected');
       io.emit('admin:line:status', { lineId, status: 'connected' });
+      pendingQrs.delete(lineId);
     }
 
     if (connection === 'close') {
@@ -145,6 +148,8 @@ async function createBaileysClient(lineId) {
 
       await updateLineStatus(lineId, 'disconnected');
       io.emit('admin:line:status', { lineId, status: 'disconnected' });
+      pendingQrs.delete(lineId);
+      delete lineClients[lineId];
 
       if (code === DisconnectReason.loggedOut) {
         console.log(`🔒 Línea ${lineId} hizo logout manual, no se reintenta.`);
@@ -259,6 +264,7 @@ async function destroyBaileysClient(lineId) {
     console.error('Error al hacer logout Baileys:', e.message);
   }
   delete lineClients[lineId];
+  pendingQrs.delete(lineId);
   await updateLineStatus(lineId, 'disconnected');
 }
 
@@ -267,6 +273,11 @@ async function destroyBaileysClient(lineId) {
 // ============================
 io.on('connection', (socket) => {
   console.log('🧠 Admin conectado a backend Baileys');
+
+  // Enviar QR pendientes para que cada administrador vea los códigos activos
+  for (const [lineId, qrDataUrl] of pendingQrs.entries()) {
+    socket.emit('admin:line:qr', { lineId, qrDataUrl });
+  }
 
   socket.on('admin:lines:list', async () => {
     try {
@@ -341,6 +352,8 @@ io.on('connection', (socket) => {
 
   socket.on('admin:line:start', async ({ lineId }) => {
     try {
+      io.emit('admin:line:status', { lineId, status: 'connecting' });
+      await updateLineStatus(lineId, 'connecting');
       await createBaileysClient(lineId);
       socket.emit('admin:line:start:result', { lineId, ok: true });
     } catch (err) {
