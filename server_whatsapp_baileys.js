@@ -149,7 +149,6 @@ async function createBaileysClient(lineId) {
       await updateLineStatus(lineId, 'disconnected');
       io.emit('admin:line:status', { lineId, status: 'disconnected' });
       pendingQrs.delete(lineId);
-      delete lineClients[lineId];
 
       if (code === DisconnectReason.loggedOut) {
         console.log(`🔒 Línea ${lineId} hizo logout manual, no se reintenta.`);
@@ -353,7 +352,6 @@ io.on('connection', (socket) => {
   socket.on('admin:line:start', async ({ lineId }) => {
     try {
       io.emit('admin:line:status', { lineId, status: 'connecting' });
-      await updateLineStatus(lineId, 'connecting');
       await createBaileysClient(lineId);
       socket.emit('admin:line:start:result', { lineId, ok: true });
     } catch (err) {
