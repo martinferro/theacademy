@@ -56,6 +56,8 @@
         socket: null,
         socketReady: false,
         pendingHistory: null,
+        maxLines: 8,
+        qrs: new Map(),
     };
 
     const sessionWindows = new Map();
@@ -65,9 +67,10 @@
         const normalized = {
             id: String(line.id),
             nombre: line.nombre && String(line.nombre).trim() ? String(line.nombre).trim() : String(line.id),
-            estado: line.estado === 'connected' || line.estado === 'connecting' ? line.estado : 'disconnected',
+            estado: ['connected', 'waiting_qr', 'error'].includes(line.estado) ? line.estado : 'disconnected',
             ultimaConexion: line.ultimaConexion || null,
             ultimoMensaje: null,
+            qr: line.qr || null,
         };
         if (line.ultimoMensaje) {
             normalized.ultimoMensaje = normalizeMessage(line.ultimoMensaje);
@@ -97,14 +100,30 @@
         return state.messages.get(lineId);
     }
 
+    function setLineQr(lineId, qr) {
+        if (!lineId) return;
+        if (qr) {
+            state.qrs.set(lineId, qr);
+        } else {
+            state.qrs.delete(lineId);
+        }
+        const line = state.lines.get(lineId);
+        if (line) {
+            line.qr = qr || null;
+            state.lines.set(lineId, line);
+        }
+    }
+
     function getStatusLabel(estado) {
         switch (estado) {
             case 'connected':
-                return 'Conectado';
-            case 'connecting':
-                return 'Conectando';
+                return 'Conectada';
+            case 'waiting_qr':
+                return 'Esperando escaneo';
+            case 'error':
+                return 'Error';
             default:
-                return 'Desconectado';
+                return 'No conectada';
         }
     }
 
@@ -112,8 +131,10 @@
         switch (estado) {
             case 'connected':
                 return 'status-badge--online';
-            case 'connecting':
+            case 'waiting_qr':
                 return 'status-badge--connecting';
+            case 'error':
+                return 'status-badge--offline';
             default:
                 return 'status-badge--offline';
         }
@@ -176,8 +197,10 @@
         switch (line.estado) {
             case 'connected':
                 return { label: 'Conectado', variant: 'success' };
-            case 'connecting':
-                return { label: 'Conectando', variant: 'warning' };
+            case 'waiting_qr':
+                return { label: 'Esperando escaneo', variant: 'warning' };
+            case 'error':
+                return { label: 'Error', variant: 'danger' };
             default:
                 return { label: 'Desconectado', variant: 'secondary' };
         }
@@ -348,7 +371,10 @@
         if (!sessionGrid) return;
         sessionGrid.innerHTML = '';
 
-        const lines = Array.isArray(sortedLines) ? sortedLines.slice(0, 8) : getSortedLines().slice(0, 8);
+        const maxVisible = state.maxLines || 8;
+        const lines = Array.isArray(sortedLines)
+            ? sortedLines.slice(0, maxVisible)
+            : getSortedLines().slice(0, maxVisible);
 
         if (!lines.length) {
             if (sessionGridEmpty) {
@@ -390,6 +416,21 @@
 
             const qr = document.createElement('div');
             qr.className = 'whatsapp-session-qr';
+            if (line.qr) {
+                const img = document.createElement('img');
+                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(line.qr)}`;
+                img.alt = `QR para ${line.nombre}`;
+                img.className = 'img-fluid rounded border';
+                qr.append(img);
+            } else {
+                const hint = document.createElement('p');
+                hint.className = 'small text-muted mb-0';
+                hint.textContent =
+                    line.estado === 'connected'
+                        ? 'Sesión activa. Puedes abrir WhatsApp Web para controlar la sesión.'
+                        : 'Solicita una conexión para generar un nuevo QR.';
+                qr.append(hint);
+            }
             preview.append(qr);
             card.append(preview);
 
@@ -399,10 +440,11 @@
             const openButton = document.createElement('button');
             openButton.type = 'button';
             openButton.className = 'btn btn-success btn-sm';
-            openButton.textContent = 'Abrir sesión';
+            openButton.textContent = line.estado === 'waiting_qr' ? 'Esperando QR' : 'Conectar';
+            openButton.disabled = line.estado === 'waiting_qr';
             openButton.addEventListener('click', (event) => {
                 event.stopPropagation();
-                openWebForLine(line.id);
+                startSession(line.id);
             });
 
             actions.append(openButton);
@@ -447,6 +489,31 @@
         return win;
     }
 
+    async function startSession(lineId) {
+        if (!lineId) return;
+        try {
+            const response = await fetch(`/api/whatsapp-lines/${encodeURIComponent(lineId)}/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const data = await response.json();
+            if (!response.ok || !data?.ok) {
+                showFeedback('No se pudo iniciar la sesión de WhatsApp. Intenta nuevamente.', 'danger');
+                return;
+            }
+            if (data.qr) {
+                setLineQr(lineId, data.qr);
+            }
+            mergeLine({ id: lineId, estado: 'waiting_qr' });
+            renderLineList();
+            updateCurrentLineInfo();
+            showFeedback('Se generó un nuevo QR para esta línea.', 'success');
+        } catch (error) {
+            console.warn('No se pudo iniciar la sesión', error);
+            showFeedback('No se pudo iniciar la sesión de WhatsApp.', 'danger');
+        }
+    }
+
     function mergeLine(line) {
         const normalized = normalizeLine(line);
         if (!normalized) return null;
@@ -455,6 +522,10 @@
             ...stored,
             ...normalized,
         };
+        merged.qr = normalized.qr || state.qrs.get(normalized.id) || null;
+        if (merged.qr) {
+            state.qrs.set(normalized.id, merged.qr);
+        }
         state.lines.set(normalized.id, merged);
         return merged;
     }
@@ -510,12 +581,15 @@
         }
     }
 
-    async function refreshLinesFallback() {
+    async function refreshLines() {
         try {
-            const response = await fetch('backend/whatsapp_messages.php');
+            const response = await fetch('/api/whatsapp-lines');
             if (!response.ok) return;
             const data = await response.json();
             if (data && Array.isArray(data.lineas)) {
+                if (data.maxLines) {
+                    state.maxLines = data.maxLines;
+                }
                 data.lineas.forEach((line) => mergeLine(line));
                 renderLineList();
                 updateCurrentLineInfo();
@@ -565,32 +639,18 @@
         });
     }
 
-function initSocket() {
-  if (typeof io !== 'function') {
-    console.warn('Socket.io no está disponible para la vista de WhatsApp.');
-    handleRealtimeConnection(false);
-    return;
-  }
+    function initSocket() {
+        if (typeof io !== 'function') {
+            console.warn('Socket.io no está disponible para la vista de WhatsApp.');
+            handleRealtimeConnection(false);
+            return;
+        }
 
-  const socket = io('http://localhost:3000', {
-    path: '/socket.io',
-    transports: ['polling', 'websocket'],
-  });
-  state.socket = socket;
-
-  socket.on('connect', () => {
-    handleRealtimeConnection(true);
-    clearFeedback();
-    socket.emit('whatsapp:subscribe');
-  });
-
-  socket.on('disconnect', () => {
-    handleRealtimeConnection(false);
-    showFeedback('Se perdió la conexión en tiempo real. Puedes seguir operando en modo lectura.', 'warning');
-  });
-
-  // ... resto tal como ya lo tenés
-
+        const socket = io(socketBaseUrl, {
+            path: '/socket.io',
+            transports: ['polling', 'websocket'],
+        });
+        state.socket = socket;
 
         socket.on('connect', () => {
             handleRealtimeConnection(true);
@@ -608,9 +668,35 @@ function initSocket() {
             payload.lineas.forEach((line) => mergeLine(line));
             renderLineList();
             updateCurrentLineInfo();
+            if (payload.maxLines) {
+                state.maxLines = payload.maxLines;
+            }
             if (state.selectedLine && !state.messages.has(state.selectedLine)) {
                 requestHistory(state.selectedLine);
             }
+        });
+
+        const handleStatusChange = ({ linea, estado, ultimaConexion }) => {
+            if (!linea) return;
+            const line = mergeLine({ id: linea, estado, ultimaConexion });
+            if (estado !== 'waiting_qr') {
+                setLineQr(linea, null);
+            }
+            if (line && linea === state.selectedLine) {
+                updateCurrentLineInfo();
+            }
+            renderLineList();
+        };
+
+        socket.on('whatsapp:estadoLinea', handleStatusChange);
+        socket.on('whatsapp:line_status_changed', handleStatusChange);
+
+        socket.on('whatsapp:new_qr', ({ linea, qr }) => {
+            if (!linea || !qr) return;
+            setLineQr(linea, qr);
+            mergeLine({ id: linea, estado: 'waiting_qr', qr });
+            renderLineList();
+            updateCurrentLineInfo();
         });
 
         socket.on('whatsapp:lineaActualizada', ({ linea, lineaActualizada }) => {
@@ -621,15 +707,6 @@ function initSocket() {
             }
             renderLineList();
             updateCurrentLineInfo();
-        });
-
-        socket.on('whatsapp:estadoLinea', ({ linea, estado, ultimaConexion }) => {
-            if (!linea) return;
-            const line = mergeLine({ id: linea, estado, ultimaConexion });
-            if (line && linea === state.selectedLine) {
-                updateCurrentLineInfo();
-            }
-            renderLineList();
         });
 
         socket.on('whatsapp:nuevoMensaje', ({ linea, mensaje }) => {
@@ -673,7 +750,7 @@ function initSocket() {
 
         if (refreshButton) {
             refreshButton.addEventListener('click', () => {
-                refreshLinesFallback();
+                refreshLines();
                 if (state.selectedLine) {
                     requestHistory(state.selectedLine);
                 }
@@ -698,7 +775,7 @@ function initSocket() {
 
         if (openAllWebButton) {
             openAllWebButton.addEventListener('click', () => {
-                const lines = getSortedLines().slice(0, 8);
+                const lines = getSortedLines().slice(0, state.maxLines || 8);
                 if (!lines.length) {
                     showFeedback('No hay líneas registradas para abrir.', 'warning');
                     return;
@@ -719,17 +796,11 @@ function initSocket() {
 
         if (connectButton) {
             connectButton.addEventListener('click', () => {
-                if (!state.socket || !state.selectedLine || !state.socketReady) {
-                    showFeedback('Necesitamos la conexión en tiempo real para actualizar el estado.', 'danger');
+                if (!state.selectedLine) {
+                    showFeedback('Selecciona una línea para iniciar la sesión.', 'danger');
                     return;
                 }
-                state.socket.emit('whatsapp:actualizarEstado', { linea: state.selectedLine, estado: 'connected' }, (response) => {
-                    if (!response || !response.ok) {
-                        showFeedback(response?.error || 'No se pudo actualizar el estado.', 'danger');
-                        return;
-                    }
-                    showFeedback('La línea se marcó como conectada.', 'success');
-                });
+                startSession(state.selectedLine);
             });
         }
 
@@ -820,34 +891,35 @@ function initSocket() {
                     createForm.classList.add('was-validated');
                     return;
                 }
-                if (!state.socket || !state.socketReady) {
-                    showFeedback('Se requiere la conexión en tiempo real para registrar la línea.', 'danger');
-                    return;
-                }
                 const id = createIdInput.value.trim();
                 const nombre = createNameInput.value.trim();
                 if (!id || !nombre) {
                     createForm.classList.add('was-validated');
                     return;
                 }
-                state.socket.emit(
-                    'whatsapp:upsertLinea',
-                    {
-                        id,
-                        nombre,
-                    },
-                    (response) => {
-                        if (!response || !response.ok) {
-                            showFeedback(response?.error || 'No se pudo guardar la línea.', 'danger');
+                fetch('/api/whatsapp-lines', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ displayName: nombre, sessionKey: id }),
+                })
+                    .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+                    .then(({ ok, data }) => {
+                        if (!ok || !data?.ok) {
+                            const errorMessage = data?.error === 'max_lines_reached'
+                                ? 'Se alcanzó el máximo de líneas configuradas.'
+                                : 'No se pudo guardar la línea.';
+                            showFeedback(errorMessage, 'danger');
                             return;
                         }
                         showFeedback('Línea guardada correctamente.', 'success');
                         createForm.reset();
                         createForm.classList.remove('was-validated');
-                        mergeLine(response.lineaActualizada || { id: response.linea, nombre });
+                        mergeLine(data.linea);
                         renderLineList();
-                    }
-                );
+                    })
+                    .catch(() => {
+                        showFeedback('No se pudo guardar la línea.', 'danger');
+                    });
             });
         }
     }
@@ -860,7 +932,7 @@ function initSocket() {
             handleRealtimeConnection(false);
         }
         initSocket();
-        refreshLinesFallback();
+        refreshLines();
         setupEvents();
     }
 

@@ -18,15 +18,13 @@ const sessionStore = require("./lib/sessionStore");
 const smsService = require("./services/smsService");
 const whatsappCentral = require("./services/whatsappCentral");
 const integrateMultiWhatsapp = require("./services/multi_whatsapp");
+const createWhatsappRepository = require("./services/whatsappRepository");
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
-
-whatsappCentral.attach(io);
-integrateMultiWhatsapp(whatsappCentral);
 
 app.use(cors());
 app.use(express.json());
@@ -142,6 +140,7 @@ const dbConfig = {
 };
 
 let pool;
+let whatsappRepository;
 
 async function ensureDatabase() {
   const { database, ...configWithoutDb } = dbConfig;
@@ -189,6 +188,19 @@ async function ensureTables() {
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT fk_mensajes_thread FOREIGN KEY (thread_id)
           REFERENCES chat_threads(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS whatsapp_lines (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_key VARCHAR(100) NOT NULL UNIQUE,
+        display_name VARCHAR(120) NOT NULL,
+        status ENUM('disconnected', 'waiting_qr', 'connected', 'error') DEFAULT 'disconnected',
+        last_connection_at DATETIME NULL,
+        last_message_at DATETIME NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
@@ -897,7 +909,7 @@ app.post("/webhooks/whatsapp", async (req, res) => {
       },
     });
 
-    whatsappCentral.setLineStatus(
+    await whatsappCentral.setLineStatus(
       linea,
       "connected",
       { ultimaConexion: new Date().toISOString() },
@@ -911,12 +923,49 @@ app.post("/webhooks/whatsapp", async (req, res) => {
   }
 });
 
-app.get("/api/whatsapp/lines", requireCajeroAuth, (req, res) => {
+const listWhatsappLines = async (req, res) => {
   try {
+    await whatsappCentral.refreshLinesFromRepository();
     const lineas = whatsappCentral.getLines();
-    return res.json({ ok: true, lineas });
+    return res.json({
+      ok: true,
+      lineas,
+      maxLines: whatsappRepository?.maxLines || parseInt(process.env.WHATSAPP_MAX_LINES || "8", 10),
+    });
   } catch (error) {
     console.error("❌ Error listando líneas de WhatsApp:", error);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+};
+
+app.get("/api/whatsapp/lines", requireCajeroAuth, listWhatsappLines);
+app.get("/api/whatsapp-lines", requireCajeroAuth, listWhatsappLines);
+
+app.post("/api/whatsapp-lines", requireCajeroAuth, async (req, res) => {
+  const { displayName, sessionKey } = req.body || {};
+  if (!displayName || typeof displayName !== "string") {
+    return res.status(400).json({ ok: false, error: "missing_display_name" });
+  }
+  try {
+    const linea = await whatsappCentral.createLine({ sessionKey, displayName });
+    return res.status(201).json({ ok: true, linea });
+  } catch (error) {
+    if (error.message === "max_lines_reached") {
+      return res.status(400).json({ ok: false, error: "max_lines_reached" });
+    }
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+app.post("/api/whatsapp-lines/:lineId/start", requireCajeroAuth, async (req, res) => {
+  const lineId = req.params.lineId;
+  try {
+    const { qr } = await whatsappCentral.startSession(lineId);
+    return res.json({ ok: true, linea: lineId, qr });
+  } catch (error) {
+    if (error.message === "line_not_found") {
+      return res.status(404).json({ ok: false, error: "line_not_found" });
+    }
     return res.status(500).json({ ok: false, error: "server_error" });
   }
 });
@@ -1171,6 +1220,15 @@ async function bootstrap() {
     await ensureDatabase();
     pool = mysql.createPool(dbConfig);
     await ensureTables();
+
+    whatsappRepository = createWhatsappRepository(pool, {
+      maxLines: parseInt(process.env.WHATSAPP_MAX_LINES || "8", 10),
+    });
+    await whatsappCentral.useRepository(whatsappRepository, {
+      maxLines: whatsappRepository.maxLines,
+    });
+    whatsappCentral.attach(io);
+    integrateMultiWhatsapp(whatsappCentral);
 
     server.listen(PORT, () => {
       console.log(`✅ Servidor funcionando en http://localhost:${PORT}`);

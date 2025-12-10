@@ -19,20 +19,11 @@ module.exports = function integrateMultiWhatsapp(central) {
     return;
   }
 
-  const lines = central.getLines();
-  lines.forEach((line) => {
-    const alreadyConnected = line.estado === 'connected';
-    central.setLineStatus(
-      line.id,
-      alreadyConnected ? line.estado : 'connected',
-      {
-        ultimaConexion: line.ultimaConexion || new Date().toISOString(),
-      },
-      { silent: alreadyConnected }
-    );
-  });
-
   central.on('salida:enviar', ({ linea, to, body }) => {
     log(`Mensaje saliente desde ${linea} hacia ${to || 'destino desconocido'}: ${body}`);
+  });
+
+  central.on('new_qr', ({ linea }) => {
+    log(`QR generado para la línea ${linea}. Esperando escaneo...`);
   });
 };

@@ -4,24 +4,9 @@ const crypto = require('crypto');
 const EventEmitter = require('events');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'whatsapp-central.json');
-const DEFAULT_LINE_COUNT = 8;
+const DEFAULT_MAX_LINES = parseInt(process.env.WHATSAPP_MAX_LINES || '8', 10);
 
-const ENVIRONMENT_LINES = (process.env.WHATSAPP_LINES || '')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean)
-  .map((value) => ({ id: value, nombre: value }));
-
-const FALLBACK_LINES = Array.from({ length: DEFAULT_LINE_COUNT }, (_, index) => ({
-  id: `linea-${index + 1}`,
-  nombre: `Línea ${index + 1}`,
-}));
-
-const DEFAULT_LINES = [...ENVIRONMENT_LINES, ...FALLBACK_LINES].filter((line, index, array) =>
-  line && line.id && array.findIndex((candidate) => candidate?.id === line.id) === index
-);
-
-const VALID_STATES = new Set(['connected', 'connecting', 'disconnected']);
+const VALID_STATES = new Set(['disconnected', 'waiting_qr', 'connected', 'error']);
 
 function normalizeLineId(value) {
   if (typeof value !== 'string' && typeof value !== 'number') {
@@ -52,8 +37,12 @@ class WhatsappCentral extends EventEmitter {
   constructor() {
     super();
     this.io = null;
-    this.store = { lines: {} };
+    this.repository = null;
+    this.maxLines = DEFAULT_MAX_LINES;
+    this.lines = new Map();
     this.storePath = DATA_PATH;
+    this.store = { messages: {} };
+    this.pendingQrs = new Map();
     this.#load();
   }
 
@@ -61,13 +50,37 @@ class WhatsappCentral extends EventEmitter {
     this.io = io;
   }
 
+  async useRepository(repository, options = {}) {
+    this.repository = repository || null;
+    if (options.maxLines) {
+      const parsed = parseInt(options.maxLines, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        this.maxLines = parsed;
+      }
+    }
+    if (this.repository) {
+      await this.refreshLinesFromRepository();
+    }
+  }
+
+  async refreshLinesFromRepository() {
+    if (!this.repository || typeof this.repository.listLines !== 'function') return;
+    const rows = await this.repository.listLines();
+    rows.forEach((row) => this.#storeRepositoryLine(row));
+  }
+
   registerSocket(socket) {
-    const emitInitial = () => {
+    const emitInitial = async () => {
       socket.emit('whatsapp:lineas', { lineas: this.getLines() });
     };
 
     const statusListener = (payload) => {
+      socket.emit('whatsapp:line_status_changed', payload);
       socket.emit('whatsapp:estadoLinea', payload);
+    };
+
+    const qrListener = (payload) => {
+      socket.emit('whatsapp:new_qr', payload);
     };
 
     const messageListener = (payload) => {
@@ -78,9 +91,10 @@ class WhatsappCentral extends EventEmitter {
       socket.emit('whatsapp:lineaActualizada', payload);
     };
 
-    this.on('estadoLinea', statusListener);
+    this.on('line_status_changed', statusListener);
     this.on('nuevoMensaje', messageListener);
     this.on('lineaActualizada', lineListener);
+    this.on('new_qr', qrListener);
 
     socket.on('whatsapp:subscribe', emitInitial);
     emitInitial();
@@ -168,7 +182,7 @@ class WhatsappCentral extends EventEmitter {
       }
     });
 
-    socket.on('whatsapp:actualizarEstado', (payload = {}, ack) => {
+    socket.on('whatsapp:actualizarEstado', async (payload = {}, ack) => {
       const respond = typeof ack === 'function' ? ack : () => {};
       const lineId = normalizeLineId(payload.linea || payload.line || payload.id);
       if (!lineId) {
@@ -180,67 +194,83 @@ class WhatsappCentral extends EventEmitter {
       const estado = VALID_STATES.has(desired) ? desired : 'connected';
 
       try {
-        const status = this.setLineStatus(lineId, estado, payload.metadata || {}, { silent: false });
+        const status = await this.setLineStatus(lineId, estado, payload.metadata || {}, { silent: false });
         respond({ ok: true, linea: lineId, estado: status.estado, lineaActualizada: this.getLine(lineId) });
       } catch (error) {
         respond({ ok: false, error: error.message === 'line_not_found' ? 'line_not_found' : 'update_failed' });
       }
     });
 
-    socket.on('whatsapp:upsertLinea', (payload = {}, ack) => {
+    socket.on('whatsapp:startSession', async (payload = {}, ack) => {
       const respond = typeof ack === 'function' ? ack : () => {};
-      const lineId = normalizeLineId(payload.id || payload.linea || payload.line);
+      const lineId = normalizeLineId(payload.linea || payload.line || payload.id);
       if (!lineId) {
         respond({ ok: false, error: 'missing_line' });
         return;
       }
 
-      const nombre = sanitizeDisplayName(payload.nombre, this.#inferDisplayName(lineId));
+      try {
+        const { qr } = await this.startSession(lineId);
+        respond({ ok: true, qr });
+      } catch (error) {
+        respond({ ok: false, error: error.message || 'start_failed' });
+      }
+    });
+
+    socket.on('whatsapp:upsertLinea', async (payload = {}, ack) => {
+      const respond = typeof ack === 'function' ? ack : () => {};
+      const sessionKey = normalizeLineId(payload.id || payload.linea || payload.line);
+      const nombre = sanitizeDisplayName(payload.nombre, sessionKey || 'Línea');
+      if (!sessionKey && !nombre) {
+        respond({ ok: false, error: 'missing_line' });
+        return;
+      }
 
       try {
-        const updated = this.upsertLine(lineId, { nombre }, { silent: false });
-        respond({ ok: true, linea: lineId, lineaActualizada: updated });
+        const created = await this.createLine({ sessionKey: sessionKey || null, displayName: nombre });
+        respond({ ok: true, linea: created.id, lineaActualizada: created });
       } catch (error) {
-        respond({ ok: false, error: error.message === 'line_not_found' ? 'line_not_found' : 'upsert_failed' });
+        respond({ ok: false, error: error.message || 'upsert_failed' });
       }
     });
 
     socket.on('disconnect', () => {
-      this.off('estadoLinea', statusListener);
+      this.off('line_status_changed', statusListener);
       this.off('nuevoMensaje', messageListener);
       this.off('lineaActualizada', lineListener);
+      this.off('new_qr', qrListener);
     });
   }
 
   getLines() {
-    const lines = this.store?.lines || {};
-    return Object.values(lines).map((line) => this.#serializeLine(line));
+    return Array.from(this.lines.values()).map((line) => this.#serializeLine(line));
   }
 
   getLine(lineId) {
-    if (!lineId) return null;
-    const lines = this.store?.lines || {};
-    if (!lines[lineId]) return null;
-    return this.#serializeLine(lines[lineId]);
+    const key = normalizeLineId(lineId);
+    if (!key) return null;
+    const line = this.lines.get(key);
+    if (!line) return null;
+    return this.#serializeLine(line);
   }
 
   getMessages(lineId, limit = 100) {
-    const line = this.#ensureLine(lineId);
-    if (!line) {
+    const key = normalizeLineId(lineId);
+    if (!key || !this.lines.has(key)) {
       throw new Error('line_not_found');
     }
-    const messages = Array.isArray(line.mensajes) ? line.mensajes : [];
+    const messages = Array.isArray(this.store?.messages?.[key]) ? this.store.messages[key] : [];
     const slice = limit ? messages.slice(-Math.abs(parseInt(limit, 10) || 100)) : messages;
     return slice.map((message) => this.#formatMessage(message));
   }
 
   appendMessage(lineId, message, options = {}) {
-    const line = this.#ensureLine(lineId, true);
-    if (!line) {
+    const key = normalizeLineId(lineId);
+    if (!key || !this.lines.has(key)) {
       throw new Error('line_not_found');
     }
-    if (!Array.isArray(line.mensajes)) {
-      line.mensajes = [];
+    if (!Array.isArray(this.store.messages[key])) {
+      this.store.messages[key] = [];
     }
 
     const stored = this.#normalizeMessage({
@@ -249,54 +279,127 @@ class WhatsappCentral extends EventEmitter {
       timestamp: message.timestamp || new Date().toISOString(),
     });
 
-    line.mensajes.push(stored);
-    line.ultimaActividad = stored.timestamp;
-    line.ultimoMensaje = stored.id;
-    this.store.lines[lineId] = line;
+    this.store.messages[key].push(stored);
     this.#save();
 
+    if (this.repository && typeof this.repository.touchMessageActivity === 'function') {
+      this.repository.touchMessageActivity(key).catch(() => {});
+    }
+
     const formatted = this.#formatMessage(stored);
+    const line = this.lines.get(key) || { id: key };
+    line.ultimoMensaje = formatted;
+    this.lines.set(key, line);
+
     if (!options.silent) {
-      const payload = { linea: lineId, mensaje: formatted };
+      const payload = { linea: key, mensaje: formatted };
       if (this.io) {
         this.io.emit('whatsapp:nuevoMensaje', payload);
       }
       this.emit('nuevoMensaje', payload);
     }
-    this.#broadcastLine(lineId, options);
+    this.#broadcastLine(key, options);
     return formatted;
   }
 
-  setLineStatus(lineId, estado, metadata = {}, options = {}) {
-    const line = this.#ensureLine(lineId, true);
-    if (!line) {
+  async setLineStatus(lineId, estado, metadata = {}, options = {}) {
+    const key = normalizeLineId(lineId);
+    if (!key || !this.lines.has(key)) {
       throw new Error('line_not_found');
     }
+    let line = this.lines.get(key);
     line.estado = VALID_STATES.has(estado) ? estado : line.estado || 'disconnected';
     if (metadata.ultimaConexion) {
       line.ultimaConexion = metadata.ultimaConexion;
-    } else if (estado === 'connected') {
+    } else if (line.estado === 'connected') {
       line.ultimaConexion = new Date().toISOString();
     }
-    this.store.lines[lineId] = line;
-    this.#save();
+    if (line.estado !== 'waiting_qr') {
+      this.pendingQrs.delete(key);
+    }
+    this.lines.set(key, line);
+
+    if (this.repository && typeof this.repository.updateStatus === 'function') {
+      const updated = await this.repository.updateStatus(key, line.estado, line.ultimaConexion || null);
+      if (updated) {
+        this.#storeRepositoryLine(updated);
+        line = this.lines.get(key) || line;
+      }
+    }
 
     const payload = {
-      linea: lineId,
+      linea: key,
       estado: line.estado,
       ultimaConexion: line.ultimaConexion || null,
     };
 
     if (!options.silent) {
       if (this.io) {
+        this.io.emit('whatsapp:line_status_changed', payload);
         this.io.emit('whatsapp:estadoLinea', payload);
       }
-      this.emit('estadoLinea', payload);
+      this.emit('line_status_changed', payload);
     }
 
-    this.#broadcastLine(lineId, options);
+    this.#broadcastLine(key, options);
 
     return payload;
+  }
+
+  async createLine({ sessionKey, displayName }) {
+    const normalizedKey = normalizeLineId(sessionKey || displayName || `linea-${Date.now()}`);
+    const nombre = sanitizeDisplayName(displayName, normalizedKey);
+    if (!normalizedKey || !nombre) {
+      throw new Error('missing_line');
+    }
+
+    if (this.lines.size >= this.maxLines) {
+      throw new Error('max_lines_reached');
+    }
+
+    if (this.repository && typeof this.repository.createLine === 'function') {
+      const row = await this.repository.createLine({ sessionKey: normalizedKey, displayName: nombre });
+      this.#storeRepositoryLine(row);
+    } else {
+      this.lines.set(normalizedKey, {
+        id: normalizedKey,
+        nombre,
+        estado: 'disconnected',
+        ultimaConexion: null,
+      });
+    }
+
+    if (!this.store.messages[normalizedKey]) {
+      this.store.messages[normalizedKey] = [];
+      this.#save();
+    }
+
+    return this.#broadcastLine(normalizedKey, { silent: false });
+  }
+
+  async startSession(lineId) {
+    const key = normalizeLineId(lineId);
+    if (!key) {
+      throw new Error('line_not_found');
+    }
+    if (!this.lines.has(key) && this.repository && typeof this.repository.ensureLine === 'function') {
+      const dbLine = await this.repository.ensureLine(key);
+      if (dbLine) {
+        this.#storeRepositoryLine(dbLine);
+      }
+    }
+    if (!this.lines.has(key)) {
+      throw new Error('line_not_found');
+    }
+    await this.setLineStatus(key, 'waiting_qr');
+    const qr = this.#generateQr(key);
+    this.pendingQrs.set(key, qr);
+    const payload = { linea: key, qr };
+    if (this.io) {
+      this.io.emit('whatsapp:new_qr', payload);
+    }
+    this.emit('new_qr', payload);
+    return { qr };
   }
 
   registerIncoming(lineId, message) {
@@ -307,52 +410,22 @@ class WhatsappCentral extends EventEmitter {
     return this.appendMessage(lineId, { ...message, direction: 'outgoing' });
   }
 
-  upsertLine(lineId, updates = {}, options = {}) {
-    const line = this.#ensureLine(lineId, true);
-    if (!line) {
-      throw new Error('line_not_found');
-    }
-
-    if (typeof updates.nombre === 'string' && updates.nombre.trim()) {
-      line.nombre = updates.nombre.trim();
-    }
-
-    if (typeof updates.estado === 'string' && VALID_STATES.has(updates.estado)) {
-      line.estado = updates.estado;
-    }
-
-    if (updates.ultimaConexion) {
-      line.ultimaConexion = updates.ultimaConexion;
-    }
-
-    this.store.lines[lineId] = line;
-    this.#save();
-
-    return this.#broadcastLine(lineId, options);
-  }
-
-  #ensureLine(lineId, autoCreate = false) {
-    if (!lineId) return null;
-    if (!this.store.lines[lineId]) {
-      if (!autoCreate) {
-        return null;
-      }
-      this.store.lines[lineId] = {
-        id: lineId,
-        nombre: this.#inferDisplayName(lineId),
-        estado: 'disconnected',
-        ultimaConexion: null,
-        mensajes: [],
-      };
-    }
-    return this.store.lines[lineId];
-  }
-
-  #inferDisplayName(lineId) {
-    const predefined = DEFAULT_LINES.find((line) => line.id === lineId);
-    if (predefined) return predefined.nombre || lineId;
-    if (!lineId) return 'Línea';
-    return lineId.replace(/_/g, ' ');
+  #storeRepositoryLine(row) {
+    if (!row) return null;
+    const sessionKey = normalizeLineId(row.session_key || row.id);
+    if (!sessionKey) return null;
+    const line = {
+      id: sessionKey,
+      dbId: row.id,
+      nombre: sanitizeDisplayName(row.display_name, sessionKey),
+      estado: VALID_STATES.has(row.status) ? row.status : 'disconnected',
+      ultimaConexion: row.last_connection_at ? new Date(row.last_connection_at).toISOString() : null,
+      ultimoMensaje: row.last_message_at ? new Date(row.last_message_at).toISOString() : null,
+      createdAt: row.created_at || null,
+      updatedAt: row.updated_at || null,
+    };
+    this.lines.set(sessionKey, line);
+    return line;
   }
 
   #normalizeMessage(message) {
@@ -394,20 +467,22 @@ class WhatsappCentral extends EventEmitter {
 
   #serializeLine(line) {
     if (!line) return null;
-    const messages = Array.isArray(line.mensajes) ? line.mensajes : [];
-    const lastMessage = messages.length ? messages[messages.length - 1] : null;
+    const messages = Array.isArray(this.store?.messages?.[line.id]) ? this.store.messages[line.id] : [];
+    const lastMessage = messages.length ? messages[messages.length - 1] : line.ultimoMensaje || null;
     return {
       id: line.id,
-      nombre: line.nombre || this.#inferDisplayName(line.id),
+      nombre: line.nombre || line.id,
       estado: VALID_STATES.has(line.estado) ? line.estado : 'disconnected',
       ultimaConexion: line.ultimaConexion || null,
       ultimoMensaje: lastMessage ? this.#formatMessage(lastMessage) : null,
+      qr: this.pendingQrs.get(line.id) || null,
+      dbId: line.dbId || null,
     };
   }
 
   #broadcastLine(lineId, options = {}) {
     if (!lineId) return null;
-    const line = this.store?.lines?.[lineId];
+    const line = this.lines.get(lineId);
     if (!line) return null;
     const serialized = this.#serializeLine(line);
     if (!options.silent) {
@@ -418,6 +493,11 @@ class WhatsappCentral extends EventEmitter {
       this.emit('lineaActualizada', payload);
     }
     return serialized;
+  }
+
+  #generateQr(lineId) {
+    const secret = crypto.randomBytes(8).toString('hex');
+    return `WAC-${lineId}-${secret}`;
   }
 
   #load() {
@@ -431,33 +511,15 @@ class WhatsappCentral extends EventEmitter {
       }
     } catch (error) {
       console.warn('No se pudo leer el estado de WhatsApp central, se regenerará.', error.message);
-      this.store = { lines: {} };
+      this.store = { messages: {} };
     }
 
     if (!this.store || typeof this.store !== 'object') {
-      this.store = { lines: {} };
+      this.store = { messages: {} };
     }
-
-    if (!this.store.lines || typeof this.store.lines !== 'object') {
-      this.store.lines = {};
+    if (!this.store.messages || typeof this.store.messages !== 'object') {
+      this.store.messages = {};
     }
-
-    DEFAULT_LINES.forEach((line) => {
-      if (!line.id) return;
-      if (!this.store.lines[line.id]) {
-        this.store.lines[line.id] = {
-          id: line.id,
-          nombre: line.nombre || line.id,
-          estado: 'disconnected',
-          ultimaConexion: null,
-          mensajes: [],
-        };
-      } else if (!this.store.lines[line.id].nombre) {
-        this.store.lines[line.id].nombre = line.nombre || line.id;
-      }
-    });
-
-    this.#save();
   }
 
   #save() {
