@@ -56,8 +56,12 @@ app.get('/', (req, res) => res.send('WhatsApp backend (Baileys) OK'));
 //  CONEXIÓN COMO CLIENTE AL SERVIDOR PRINCIPAL (cajero)
 // ---------------------------------------------
 const MAIN_SERVER_URL = process.env.MAIN_SERVER_URL || 'http://localhost:3000';
+
+// 👇 Esto va a hacer el GET a:
+// http://localhost:3000/socket.io/?EIO=4&transport=polling...
 const cajeroSocket = ClientIO(MAIN_SERVER_URL, {
-  transports: ['websocket'],
+  path: '/socket.io',                 // 👈 mismo path que el server principal
+  transports: ['polling', 'websocket'], // 👈 permite empezar por polling (como la URL que probaste)
   reconnection: true
 });
 

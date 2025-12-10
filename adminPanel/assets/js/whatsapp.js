@@ -1,4 +1,8 @@
 (function () {
+    const socketBaseUrl = "http://localhost:3000";
+
+
+    
     const lineList = document.getElementById('whatsappAdminLineList');
     const lineListEmpty = document.getElementById('whatsappAdminLineListEmpty');
     const refreshButton = document.getElementById('whatsappAdminRefresh');
@@ -547,8 +551,9 @@
             return true;
         }
 
-        const baseUrl = window.SOCKET_IO_BASE_URL || '';
-        const scriptUrl = baseUrl ? `${baseUrl}/socket.io/socket.io.js` : '/socket.io/socket.io.js';
+            const scriptUrl = socketBaseUrl
+            ? `${socketBaseUrl}/socket.io/socket.io.js`
+            : '/socket.io/socket.io.js';
 
         return new Promise((resolve) => {
             const script = document.createElement('script');
@@ -560,15 +565,32 @@
         });
     }
 
-    function initSocket() {
-        if (typeof io !== 'function') {
-            console.warn('Socket.io no está disponible para la vista de WhatsApp.');
-            handleRealtimeConnection(false);
-            return;
-        }
+function initSocket() {
+  if (typeof io !== 'function') {
+    console.warn('Socket.io no está disponible para la vista de WhatsApp.');
+    handleRealtimeConnection(false);
+    return;
+  }
 
-        const socket = io();
-        state.socket = socket;
+  const socket = io('http://localhost:3000', {
+    path: '/socket.io',
+    transports: ['polling', 'websocket'],
+  });
+  state.socket = socket;
+
+  socket.on('connect', () => {
+    handleRealtimeConnection(true);
+    clearFeedback();
+    socket.emit('whatsapp:subscribe');
+  });
+
+  socket.on('disconnect', () => {
+    handleRealtimeConnection(false);
+    showFeedback('Se perdió la conexión en tiempo real. Puedes seguir operando en modo lectura.', 'warning');
+  });
+
+  // ... resto tal como ya lo tenés
+
 
         socket.on('connect', () => {
             handleRealtimeConnection(true);
